@@ -43,14 +43,14 @@ def console(bot=None,**vars):
     while True: #Control loop
         try:
             a = raw_input()
-            print '==============='
-            print eval(a)
-            print '==============='
+            print('===============')
+            print(eval(a))
+            print('===============')
         except:
             # Catch for exceptions to allow the console to continue operating.
-            print '>>>Exception occured: %s'%sys.exc_info()[1]
+            print('>>>Exception occured: %s'%sys.exc_info()[1])
             print_tb(sys.exc_info()[2])
-            print '==============='
+            print('===============')
 
 def modload(*modlist):
     """
@@ -60,11 +60,11 @@ def modload(*modlist):
         # If exists, reload
         if x in sys.modules:
             reload(sys.modules[x])
-            print x + ' has been reloaded.'
+            print(x + ' has been reloaded.')
         else:
             # If not exists, import
             sys.modules[x] = __import__(x)
-            print x + ' has been loaded.'
+            print(x + ' has been loaded.')
     
 class Base(object):
     def __init__(self, host, **kwargs):
@@ -496,7 +496,7 @@ class Base(object):
     
     def _cmd(self, raw_line):
         if self.config['verbose']: 
-            print ("(%s: %s) > %s" % (
+            print("(%s: %s) > %s" % (
                 self.config['name'], 
                 self.config['host'], 
                 "".join([x if ord(x) < 128 else '?' for x in raw_line])
@@ -504,7 +504,7 @@ class Base(object):
         try:
             self.socket.send(raw_line+"\r\n")
         except socket.timeout:
-            print ">>>Socket timed out."
+            print(">>>Socket timed out.")
         
     @hook.queue()
     def message(self, t, m):
@@ -620,31 +620,31 @@ class Base(object):
         """
         if self.socket:
             self._close(False)
-            print "--- %s: %s ---"% (
+            print("--- %s: %s ---"% (
                 self.config['name'],
                 self.config['host']
-            )
-            if self.config['verbose']: print "Connection closed."
+            ))
+            if self.config['verbose']: print("Connection closed.")
             if 'disconnect' in self._hooks:
                 for func in self._hooks['disconnect']:
                     func(self)
             
         if self.ERROR >= 10:
-            print "There have been 10 or more failed attempts to reconnect."
-            print "Please wait till the bot is able to do so, then press enter to try again."
+            print("There have been 10 or more failed attempts to reconnect.")
+            print("Please wait till the bot is able to do so, then press enter to try again.")
             raw_input('Press ENTER to continue')
         elif self.ERROR:
-            print "Error occurred (see stack trace). Waiting %d seconds to reconnect." %\
-                (30*self.ERROR+30)
+            print("Error occurred (see stack trace). Waiting %d seconds to reconnect." %\
+                (30*self.ERROR+30))
             pause(30*self.ERROR+30)
         elif self.config['reconnect']:
             # raw_input()
-            if self.config['verbose']: print "Waiting 10 seconds to reconnect..."
+            if self.config['verbose']: print("Waiting 10 seconds to reconnect...")
             pause(8)
             
         if self.config['reconnect']:
             pause(2)
-            if self.config['verbose']: print "Opening new connection..."
+            if self.config['verbose']: print("Opening new connection...")
             self.connect()
         else:
             self.ERROR = 0
@@ -668,11 +668,11 @@ class Base(object):
                     "Unexpected socket error. Resetting connection."
                 )
         except:
-            print " "
-            print "Exception occured:", sys.exc_info()[1]
-            print " "
+            print(" ")
+            print("Exception occured:", sys.exc_info()[1])
+            print(" ")
             print_tb(sys.exc_info()[2])
-            print " "
+            print(" ")
             f = open('%s - BotLog.txt'%self.config['name'],'a')
             f.write("\r\n")
             f.write(now())
@@ -690,10 +690,10 @@ class Base(object):
         self.socket.connect((self.config['host'], self.config['port']))
         self.socket.settimeout(1.0)
         if self.config['verbose']: 
-            print "(%s: %s) Connection successful" % (
+            print("(%s: %s) Connection successful" % (
                 self.config['name'],
                 self.config['host']
-            )
+            ))
         self._cmd("CAP LS")
         self._cmd("NICK %s" % self.config['nick'])
         self._cmd("USER %s %s 0 :%s" % (
@@ -720,8 +720,8 @@ class Base(object):
     @hook.queue()
     def close(self):
         if self.config['verbose']:
-            print "Closing connection and thread for %s:%s"%\
-            (self.config['name'],self.config['host'])
+            print("Closing connection and thread for %s:%s"%\
+            (self.config['name'],self.config['host']))
         raise SystemExit()
 
     def _listen(self):
@@ -745,7 +745,7 @@ class Base(object):
                 for line in temp:
                     # Strip \r from \r\n for RFC-compliant IRC servers.
                     line = line.rstrip('\r')
-                    if self.config['verbose']: print "(%s: %s) %s" % (
+                    if self.config['verbose']: print("(%s: %s) %s" % ()
                             self.config['name'],
                             self.config['host'],
                             line
@@ -855,27 +855,27 @@ class Bot(Base):
         old_funcs = [(k,v) for k,v in self.__dict__.iteritems() if hasattr(v,'_type')]
         
         if len(old_funcs) and self.config['verbose']: 
-            print "\n(%s: %s) Unloading old hooks..." % (
+            print("\n(%s: %s) Unloading old hooks..." % (
                     self.config['name'],
                     self.config['host']
-                )
-            print "----------------------"
+                ))
+            print("----------------------")
             
         for k,v in old_funcs:
             delattr(self,k)
             if self.config['verbose']: 
-                print "(%s: %s)   -'%s' successfully removed." % (
+                print("(%s: %s)   -'%s' successfully removed." % (
                     self.config['name'],
                     self.config['host'],
                     k
-                )
+                ))
                 
         if self.config['verbose']: 
-            print "\n(%s: %s) Loading hooks..." % (
-                    self.config['name'],
-                    self.config['host']
-                )
-            print "----------------------"
+            print("\n(%s: %s) Loading hooks..." % (
+                self.config['name'],
+                self.config['host']
+            ))
+            print("----------------------")
             
         for script in scripts:
             try:
@@ -885,35 +885,35 @@ class Bot(Base):
                     sys.modules[script] = __import__(script)
                     
                 if self.config['verbose']: 
-                    print "\n(%s: %s) '%s' successfully imported." % (
-                            self.config['name'],
-                            self.config['host'],
-                            script
-                        )
+                    print("\n(%s: %s) '%s' successfully imported." % (
+                        self.config['name'],
+                        self.config['host'],
+                        script
+                    ))
             except:
                 if self.config['verbose']:
-                    print "\n(%s: %s) Error: >>>%s" % (
-                            self.config['name'],
-                            self.config['host'],
-                            str(sys.exc_info()[1])
-                        )
+                    print("\n(%s: %s) Error: >>>%s" % (
+                        self.config['name'],
+                        self.config['host'],
+                        str(sys.exc_info()[1])
+                    ))
                     print_tb(sys.exc_info()[2])
-                    print "(%s: %s) >>>Unable to import '%s'. Skipping..." % (
-                            self.config['name'],
-                            self.config['host'],
-                            script
-                        )
+                    print("(%s: %s) >>>Unable to import '%s'. Skipping..." % (
+                        self.config['name'],
+                        self.config['host'],
+                        script
+                    ))
             else:
                 for k,v in sys.modules[script].__dict__.iteritems():
                     if hasattr(v,'_type'):
                         setattr(self,k,v)
                         if self.config['verbose']: 
-                            print "(%s: %s)   -'%s' successfully added." % (
+                            print("(%s: %s)   -'%s' successfully added." % (
                                 self.config['name'],
                                 self.config['host'],
                                 k
-                            )
-        print " "
+                            ))
+        print(" ")
         super(Bot,self).load_hooks()
         
     def ns(self, message):

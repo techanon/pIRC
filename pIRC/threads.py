@@ -33,10 +33,10 @@ class JobThread(threading.Thread):
                 self._error = False
             except:
                 if not self._error:
-                    print " "
-                    print ">>>Exception occured in thread: %s"%sys.exc_info()[1]
+                    print(" ")
+                    print(">>>Exception occured in thread: %s"%sys.exc_info()[1])
                     print_tb(sys.exc_info()[2])
-                    print " "
+                    print(" ")
                     f = open('%s - ThreadLog.txt'%self._ref.config['name'],'a')
                     f.write("\r\n")
                     f.write(now())
