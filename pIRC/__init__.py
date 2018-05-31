@@ -6,72 +6,20 @@ import re
 from os import environ
 from time import sleep as pause
 from time import ctime as now
-from traceback import print_tb,print_exc
-from threading import Thread,Timer
-
+from traceback import print_tb, print_exc
 from threads import JobThread
 import hooks as hook
+from threading import Thread, Timer
+from typing import Dict, Tuple, List, Set, Mapping, Iterator, TypeVar, Generic, Optional, Any, NoReturn
 
-def console(bot=None,**vars):
-    """
-    Function for direct interaction via terminal.
-    
-    Params:
-    -bot = 
-    -vars = kwarg dict of global variables defined in the __main__ module give the console access to.
-    """
-    
-    if vars:
-        # Define global access for variables passed to the function
-        for x,y in vars.iteritems():
-            globals()[x] = y
-    
-    main = __import__('__main__')
-    for x,y in main.__dict__.iteritems():
-        if x != 'bot' and (isinstance(y,BotGroup) or isinstance(y,Base)):
-            # Creates local variable for the relevant variables from the __main__ module
-            locals()[x] = y 
-            if not x.lower() in main.__dict__ or\
-            not (
-                    isinstance(main.__dict__[x.lower()],BotGroup) or\
-                    isinstance(main.__dict__[x.lower()],Base)
-                ):
-                # Alternate local variabe with all lowercase as the variable name
-                # as long as a variable by the same name won't be imported
-                locals()[x.lower()] = y
-            
-    while True: #Control loop
-        try:
-            a = raw_input()
-            print('===============')
-            print(eval(a))
-            print('===============')
-        except:
-            # Catch for exceptions to allow the console to continue operating.
-            print('>>>Exception occured: %s'%sys.exc_info()[1])
-            print_tb(sys.exc_info()[2])
-            print('===============')
 
-def modload(*modlist):
-    """
-    Convenince function for (re)loading custom modules.
-    """
-    for x in modlist:
-        # If exists, reload
-        if x in sys.modules:
-            reload(sys.modules[x])
-            print(x + ' has been reloaded.')
-        else:
-            # If not exists, import
-            sys.modules[x] = __import__(x)
-            print(x + ' has been loaded.')
-    
+
 class Base(object):
-    def __init__(self, host, **kwargs):
+    def __init__(self, host: str, **kwargs) -> None:
         """
         Constructor
-        
-        Initializes a new pyrc.Base with provided config variables.
+
+        Initializes a new pIRC.Base with provided config variables.
         """
         nick = "pIRCBot" if self.__class__ == Base else self.__class__.__name__
         password = environ.get('PASSWORD', None)
@@ -85,7 +33,7 @@ class Base(object):
         self.config.setdefault('nick', nick)
         # List of names that the bot will respond to on a command hook
         self.config.setdefault('names', [self.config['nick']])
-        # 
+        #
         self.config.setdefault('ident', nick.lower())
         self.config.setdefault('name', self.config['nick'])
         self.config.setdefault('realname', "pIRC Bot")
@@ -96,7 +44,7 @@ class Base(object):
         self.config.setdefault('verbose', True)
         self.config.setdefault('replace', {})
         self.config.setdefault('reconnect', True)
-        self.config.setdefault('auth',{})
+        self.config.setdefault('auth', {})
 
         self._inbuffer = ""
         self.socket = None
@@ -106,7 +54,7 @@ class Base(object):
         self.ulist = {}
         self.isupport = {}
         self._quitting = False
-        self._running = False    
+        self._running = False
 
         # init funcs
         self._add_listeners()
@@ -114,78 +62,81 @@ class Base(object):
         if self.__class__ == Base:
             self.load_hooks()
 
-    def _compile_strip_prefix(self):
+    def _compile_strip_prefix(self) -> None:
         """
         regex example:
         ^(((BotA|BotB)[,:]?\s+)|%)(.+)$
-        
+
         names = [BotA, BotB]
         command = %
         """
         name_regex_str = r'^(?:(?:(%s)[,:]?\s+)|%s)(.+)$' %\
-                (re.escape("|".join(self.config['names'])),
-                        re.escape(self.config['command']))
+            (re.escape("|".join(self.config['names'])),
+             re.escape(self.config['command']))
         self._name_regex = re.compile(name_regex_str, re.IGNORECASE)
 
-    def load_hooks(self):
+    def load_hooks(self) -> None:
         access = self.__class__
         if 'hookscripts' in self.config:
             access = self
         self._hooks = {}
         for func in access.__dict__.values():
-          if callable(func) and hasattr(func, '_type'):
-            self._hooks.setdefault(func._type.lower(),[])
-            if func._type == 'THREAD':
-                self._hooks[func._type.lower()].append(JobThread(func, self))
-            else:
-                self._hooks[func._type.lower()].append(func)
+            if callable(func) and hasattr(func, '_type'):
+                self._hooks.setdefault(func._type.lower(), [])
+                if func._type == 'THREAD':
+                    self._hooks[func._type.lower()].append(
+                        JobThread(func, self))
+                else:
+                    self._hooks[func._type.lower()].append(func)
         if 'load' in self._hooks:
             for func in self._hooks['load']:
                 func(self)
 
-    def _add_listeners(self):
+    def _add_listeners(self) -> None:
         self._listener(r'^(.*)$', self._filterraw)
-        self._listener(r'^:\S+ (\d{3}) \S+ :?(.*)',self._filtercode)
+        self._listener(r'^:\S+ (\d{3}) \S+ :?(.*)', self._filtercode)
         self._listener(r'^:(\S+) NOTICE (\S+) :(.*)', self._filternotice)
         self._listener(r'^:(\S+) PRIVMSG (\S+) :(.*)', self._filtermsg)
-        self._listener(r'^:(?P<user>\S+) (?P<action>JOIN|PART|NICK|QUIT) :?(?P<args>.*)', self._manage_ulist)
-        self._listener(r'^:\S+ (?P<action>MODE) (?P<channel>\S+) (?P<modes>[+\-]\w+) (?P<args>.*)', self._ulist_modes)
-        self._listener(r'^:\S+ PONG \S+ :_init_',self._init)
+        self._listener(
+            r'^:(?P<user>\S+) (?P<action>JOIN|PART|NICK|QUIT) :?(?P<args>.*)', self._manage_ulist)
+        self._listener(
+            r'^:\S+ (?P<action>MODE) (?P<channel>\S+) (?P<modes>[+\-]\w+) (?P<args>.*)', self._ulist_modes)
+        self._listener(r'^:\S+ PONG \S+ :_init_', self._init)
         self._listener(r'^PING :(.*)', self._ping)
         self._listener(r'^PONG :(.*)', self._pong)
         self._listener(r'^ERROR (.*)', self._error)
-        self._code_listener(001, self._init_ping)
-        self._code_listener(005, self._compile_isupport)
-        self._listener(r'^:\S+ 353 \S+ \S (\#\w+) :(.*)',self._compile_ulist)
-        self._code_listener(443,self._alt_nick)
+        self._code_listener(1, self._init_ping)
+        self._code_listener(5, self._compile_isupport)
+        self._listener(r'^:\S+ 353 \S+ \S (\#\w+) :(.*)', self._compile_ulist)
+        self._code_listener(443, self._alt_nick)
 
-    def _listener(self, regex, func, temp=False):
+    def _listener(self, regex: str, func: Callable, temp: bool=False) -> None:
         array = self.listeners.setdefault(
-            re.compile(regex), 
-            {'temp':temp,'funcs':[]}
+            re.compile(regex),
+            {'temp': temp, 'funcs': []}
         )
         array['funcs'].append(func)
 
-    def _raw_listener(self, regex, func, temp=False):
-        self._listener(r'%s'%regex, func, temp)
-        
-    def _code_listener(self, num, func, temp=False):
-        self._listener(r'^:\S+ %03d \S+ :?(.*)'%num, func, temp)
+    def _raw_listener(self, regex: str, func: Callable, temp: bool=False) -> None:
+        self._listener(r'%s' % regex, func, temp)
 
-    def _strip_prefix(self, message):
+    def _code_listener(self, num: int, func: Callable, temp: bool=False) -> None:
+        self._listener(r'^:\S+ %03d \S+ :?(.*)' % num, func, temp)
+
+    def _strip_prefix(self, message: str) -> Optional[str]:
         """
         Checks if the bot was called by a user.
         Returns the suffix if so.
 
         Prefixes include the bot's nick as well as a set symbol.
         """
-        
+
         search = self._name_regex.search(message)
         if search:
             return search.groups()[1]
         return None
 
-    def _filtermsg(self, sender, target, line):
+    def _filtermsg(self, sender: str, target: str, line: str) -> None:
         line = line.strip()
         suffix = self._strip_prefix(line)
         to_continue = True
@@ -194,8 +145,8 @@ class Base(object):
                 if 'chancommand' in self._hooks:
                     if to_continue:
                         to_continue = self._parsemsgs(
-                            target, 
-                            sender, 
+                            target,
+                            sender,
                             suffix,
                             self._hooks['chancommand']
                         )
@@ -203,26 +154,26 @@ class Base(object):
                 if 'privcommand' in self._hooks:
                     if to_continue:
                         to_continue = self._parsemsgs(
-                            target, 
-                            sender, 
+                            target,
+                            sender,
                             suffix,
                             self._hooks['privcommand']
                         )
-                
+
             if 'command' in self._hooks:
                 if to_continue:
                     to_continue = self._parsemsgs(
-                        target, 
-                        sender, 
+                        target,
+                        sender,
                         suffix,
                         self._hooks['command']
                     )
         if 'action' in self._hooks:
             if to_continue:
                 to_continue = self._parseactions(
-                    target, 
-                    sender, 
-                    line, 
+                    target,
+                    sender,
+                    line,
                     self._hooks['action']
                 )
         if target.startswith('#'):
@@ -231,8 +182,8 @@ class Base(object):
                 if to_continue:
                     to_continue = self._parsemsgs(
                         target,
-                        sender, 
-                        line, 
+                        sender,
+                        line,
                         self._hooks['channel']
                     )
         else:
@@ -241,88 +192,93 @@ class Base(object):
                 if to_continue:
                     to_continue = self._parsemsgs(
                         target,
-                        sender, 
-                        line, 
+                        sender,
+                        line,
                         self._hooks['private']
                     )
         if 'text' in self._hooks:
             if to_continue:
                 to_continue = self._parsemsgs(
-                target, 
-                sender, 
-                line, 
-                self._hooks['text']
-            )
-        
-    def _filternotice(self, sender, target, line):
+                    target,
+                    sender,
+                    line,
+                    self._hooks['text']
+                )
+
+    def _filternotice(self, sender: str, target: str, line: str) -> None:
         if 'notice' in self._hooks:
             for func in self._hooks['notice']:
                 groups = self._parsematch(func._matcher, line.strip())
                 if groups is not None:
-                    if isinstance(groups,dict):
+                    if isinstance(groups, dict):
                         func(self, **groups)
                     else:
                         func(self, *groups)
-                    if self.config['break_on_match']: break
-            
-        
-    def _parsemsgs(self, target, sender, line, funcs):
+                    if self.config['break_on_match']:
+                        break
+
+    def _parsemsgs(self, target: str, sender: str, line: str, funcs: List[Callable]) -> bool:
         for func in funcs:
-            if isinstance(line,basestring): line = line.strip()
+            if isinstance(line, basestring):
+                line = line.strip()
             groups = self._parsematch(func._matcher, line.strip())
             if groups is not None:
-                if isinstance(groups,dict):
+                if isinstance(groups, dict):
                     func(self, target, sender, **groups)
                 else:
                     func(self, target, sender, *groups)
-                if self.config['break_on_match']: return False
+                if self.config['break_on_match']:
+                    return False
         return True
-        
-    def _parseactions(self, target, sender, line, funcs):
+
+    def _parseactions(self, target: str, sender: str, line: str, funcs: List[Callable]) -> bool:
         for func in funcs:
             action = re.compile("ACTION (.*)").search(line.strip())
             if action:
                 line = action.group(1)
                 groups = self._parsematch(func._matcher, line.strip())
                 if groups is not None:
-                    if isinstance(groups,dict):
+                    if isinstance(groups, dict):
                         func(self, target, sender, **groups)
                     else:
                         func(self, target, sender, *groups)
-                    if self.config['break_on_match']: return False
+                    if self.config['break_on_match']:
+                        return False
         return True
-        
-    def _filtercode(self, code, line):
+
+    def _filtercode(self, code: int, line: str) -> None:
         if 'code' in self._hooks:
             for func in self._hooks['code']:
                 if int(code) == func._code:
                     groups = self._parsematch(func._matcher, line.strip())
                     if groups is not None:
-                        if isinstance(groups,dict):
+                        if isinstance(groups, dict):
                             func(self, **groups)
                         else:
                             func(self, *groups)
-                        if self.config['break_on_match']: break
-   
-    def _filterraw(self, line):
+                        if self.config['break_on_match']:
+                            break
+
+    def _filterraw(self, line: str) -> None:
         if 'raw' in self._hooks:
             for func in self._hooks['raw']:
                 groups = self._parsematch(func._matcher, line.strip())
                 if groups is not None:
-                    if isinstance(groups,dict):
+                    if isinstance(groups, dict):
                         func(self, **groups)
                     else:
                         func(self, *groups)
-                    if self.config['break_on_match']: break
-        
-    def _parsematch(self, matcher, line):
-        matcher = re.sub(':(\w*):',self._match_replace,matcher)
+                    if self.config['break_on_match']:
+                        break
+
+    def _parsematch(self, matcher: str, line: str) -> Union[Dict, Tuple]:
+        matcher = re.sub(':(\w*):', self._match_replace, matcher)
         match = re.compile(matcher).search(line)
         if match:
             group_dict = match.groupdict()
             groups = match.groups()
             if group_dict and (len(groups) > len(group_dict)):
-              # match.groups() also returns named parameters
+                # match.groups() also returns named parameters
                 raise Exception(
                     "You cannot use both named and unnamed parameters"
                 )
@@ -331,36 +287,36 @@ class Base(object):
             else:
                 return groups
         return None
-        
-    def _match_replace(self, match):
+
+    def _match_replace(self, match) -> Any:
         if match.group(1) in self.config['replace']:
             return eval(self.config['replace'][match.group(1)])
         else:
             return ''
-    
-    def _alt_nick(self, message):
+
+    def _alt_nick(self) -> None:
         self.config['nick'] += '_'
         self.nick(self.config['nick'])
-        
-    def _error(self, line):
+
+    def _error(self, line: str) -> None:
         if not self._quitting:
             self.ERROR += 1
             raise Exception(str(line))
         else:
             self._quitting = False
-    
-    def _ping(self, line):
+
+    def _ping(self, line: str -> None):
         self._cmd("PONG :%s" % line)
         if 'ping' in self._hooks:
             for func in self._hooks['ping']:
                 func(line)
-            
-    def _pong(self, line):
+
+    def _pong(self, line: str) -> None:
         if 'pong' in self._hooks:
             for func in self._hooks['pong']:
                 func(line)
-        
-    def _compile_isupport(self, args):
+
+    def _compile_isupport(self, args: str) -> None:
         isupport = {}
         for arg in args.split():
             if arg[0] == ':':
@@ -370,17 +326,17 @@ class Base(object):
                 x.append(True)
             isupport[x[0]] = x[1]
         if 'PREFIX' in isupport:
-            if not 'PREFIX' in self.isupport:
+            if 'PREFIX' not in self.isupport:
                 self.isupport['PREFIX'] = []
             match = re.match('\((\w+)\)(\S+)', isupport['PREFIX'])
             self.isupport['PREFIX'].extend(zip(match.group(1), match.group(2)))
-        
-    def _compile_ulist(self, channel, args):
+
+    def _compile_ulist(self, channel: str, args: str) -> None:
         for user in args.split():
             if 'PREFIX' in self.isupport:
                 u = list(user)
                 m = modes = ''
-                while u[0] in [y for x,y in self.isupport['PREFIX']]:
+                while u[0] in [y for x, y in self.isupport['PREFIX']]:
                     m += u.pop(0)
                 user = ''.join(u)
                 for mode, prefix in self.isupport['PREFIX']:
@@ -393,17 +349,17 @@ class Base(object):
                     self.ulist[user].update({channel: ''})
             else:
                 self.ulist[user].update({channel: ''})
-        
-    def _ulist_modes(self, action, channel, modes, args):
+
+    def _ulist_modes(self, action: str, channel: str, modes: str, args: str) -> None:
         self._manage_ulist(channel, action, args, modes)
-            
-    def _manage_ulist(self, user, action, args, modes=None):
+
+    def _manage_ulist(self, user: str, action: str, args: str, modes: Optional[str]=None) -> None:
         if action == 'MODE':
             state = None
             offset = 0
             modes = list(modes)
             args = args.split()
-            for n,mode in enumerate(modes):
+            for n, mode in enumerate(modes):
                 if mode in '+-':
                     state = mode
                     offset += 1
@@ -412,11 +368,12 @@ class Base(object):
                         continue
                     elif state == '+':
                         self.ulist[args[n-offset]].update(
-                            {user:self.ulist[args[n-offset]][user]+mode}
+                            {user: self.ulist[args[n-offset]][user]+mode}
                         )
                     elif state == '-':
                         self.ulist[args[n-offset]].update(
-                            {user:self.ulist[args[n-offset]][user].replace(mode,'')}
+                            {user: self.ulist[args[n-offset]]
+                                [user].replace(mode, '')}
                         )
         else:
             u = user.split('!')[0]
@@ -456,17 +413,17 @@ class Base(object):
                 if 'quit' in self._hooks:
                     for func in self._hooks['quit']:
                         func(user)
-        
-    def _init_ping(self, message):
+
+    def _init_ping(self, message: str) -> None:
         self.ping("_init_")
 
-    def _init(self):
+    def _init(self) -> None:
         if self.config['password']:
             self._cmd(
-                "PRIVMSG NickServ :identify %s" %\
+                "PRIVMSG NickServ :identify %s" %
                 self.config['password']
             )
-            
+
         self.ERROR = 0
 
         # Initialize (join rooms and start threads) if the bot is not
@@ -479,10 +436,10 @@ class Base(object):
         if 'connect' in self._hooks:
             for func in self._hooks['connect']:
                 func(self)
-        
-    def _runthreads(self):
+
+    def _runthreads(self) -> True:
         if 'thread' in self._hooks:
-            for n,thread in enumerate(self._hooks['thread']):
+            for n, thread in enumerate(self._hooks['thread']):
                 if thread.is_shutdown() or thread.is_alive():
                     self._hooks[n] = thread.copy()
                     self._hooks[n].start()
@@ -490,129 +447,117 @@ class Base(object):
                     thread.start()
             else:
                 return True
-    
-    def queue(self, func, *args, **kwargs):
+
+    def queue(self, func: Callable, *args, **kwargs) -> None:
         self.queued.append((func, args, kwargs))
-    
-    def _cmd(self, raw_line):
-        if self.config['verbose']: 
+
+    def _cmd(self, raw_line: str) -> None:
+        if self.config['verbose']:
             print("(%s: %s) > %s" % (
-                self.config['name'], 
-                self.config['host'], 
+                self.config['name'],
+                self.config['host'],
                 "".join([x if ord(x) < 128 else '?' for x in raw_line])
             ))
         try:
             self.socket.send(raw_line+"\r\n")
         except socket.timeout:
             print(">>>Socket timed out.")
-        
+
     @hook.queue()
-    def message(self, t, m):
-        if isinstance(t,basestring):
-            target = [t]
-        else:
-            target = t
-        if isinstance(m,basestring):
-            messages = [m]
-        else:
-            messages = m
+    def message(self, targets: Union[List[str], str], messages: Union[List[Tuple[str, int]], List[str], str]) -> None:
+        if isinstance(targets, basestring):
+            targets = [targes]
+        if isinstance(messages, basestring):
+            messages = [messages]
         for x in target:
             for y in messages:
-                if isinstance(y,tuple) and len(y) == 2:
-                    y,z = y
+                if isinstance(y, tuple) and len(y) == 2:
+                    y, z = y
                 else:
                     z = 1
                 self._cmd("PRIVMSG %s :%s" % (x, str(y)))
                 pause(z)
-                
+
     @hook.queue()
-    def notice(self, t, m):
-        if isinstance(t,basestring):
-            target = [t]
-        else:
-            target = t
-        if isinstance(m,basestring):
-            messages = [m]
-        else:
-            messages = m
+    def notice(self, targets: Union[List[str], str], messages: Union[List[Tuple[str, int]], List[str], str]) -> None:
+        if isinstance(targets, basestring):
+            targets = [targes]
+        if isinstance(messages, basestring):
+            messages = [messages]
         for x in target:
             for y in messages:
-                if isinstance(y,tuple) and len(y) == 2:
-                    y,z = y
+                if isinstance(y, tuple) and len(y) == 2:
+                    y, z = y
                 else:
                     z = 1
                 self._cmd("NOTICE %s :%s" % (x, str(y)))
                 pause(z)
-                
+
     @hook.queue()
-    def me(self, target, message):
-        if isinstance(t,basestring):
-            target = [t]
-        else:
-            target = t
-        if isinstance(m,basestring):
-            messages = [m]
-        else:
-            messages = m
+    def me(self, targets: Union[List[str], str], messages: Union[List[Tuple[str, int]], List[str], str]) -> None:
+        if isinstance(targets, basestring):
+            targets = [targes]
+        if isinstance(messages, basestring):
+            messages = [messages]
         for x in target:
             for y in messages:
-                if isinstance(y,tuple) and len(y) == 2:
-                    y,z = y
+                if isinstance(y, tuple) and len(y) == 2:
+                    y, z = y
                 else:
                     z = 1
                 self._cmd("PRIVMSG %s : ACTION %s" % (x, str(y)))
                 pause(z)
-        
+
     @hook.queue()
-    def join(self, *channels):
+    def join(self, *channels: Tuple[str]) -> None:
         for x in channels:
             self._cmd("JOIN %s" % x)
             self._cmd("MODE %s" % x)
-        
+
     @hook.queue()
-    def part(self, *channels):
+    def part(self, *channels: Tuple[str]) -> None:
         for x in channels:
             self._cmd("PART %s" % x)
-        
+
     @hook.queue()
-    def nick(self, nick=None):
-        if not nick:
+    def nick(self, nick: Optional[str]=None) -> None:
+        if nick is None:
             nick = self.config['name']
         self._cmd("NICK %s" % nick)
-        
+
     @hook.queue()
-    def ping(self, line="timeout"):
+    def ping(self, line: str="timeout") -> None:
         self._cmd("PING :%s" % str(line))
-        
+
     @hook.queue()
-    def quit(self, message="Connection Closed"):
-        self._cmd("QUIT :%s"%message)
+    def quit(self, message: str="Connection Closed") -> None:
+        self._cmd("QUIT :%s" % message)
         self._quitting = True
         self._close()
-        
+
     @hook.queue()
-    def pause(self, time=1):
+    def pause(self, time: int=1) -> None:
         pause(time)
-        
-    def color(self, matcher):
-        return re.sub(':(\d)(?:,(\d))?:',_color_replace,matcher)
-        
+
+    def color(self, matcher) -> str:
+        return re.sub(':(\d)(?:,(\d))?:', _color_replace, matcher)
+
     def _color_replace(self, match):
         if len(match.groups()) > 1:
-            if int(match.group(1)) < 16 and int(match.group(2)) < 16 :
-                return '\x02%s,%s'%(match.group(1),match.group(2))
-                
+            if int(match.group(1)) < 16 and int(match.group(2)) < 16:
+                return '\x02%s,%s' % (match.group(1), match.group(2))
+
         if len(match.groups()) > 0:
             if int(match.group(1)) < 16:
-                return '\x02%s'%match.group(1)
-                
+                return '\x02%s' % match.group(1)
+
         return ''
-    
+
     @hook.queue()
-    def reconnect(self):
+    def reconnect(self) -> None:
         """
         Function that executes an optional connection reset.
-        
+
         Closes socket
         Checks for failed attempt count and stalls connection accordingly
         If the reconnect config is True it will reconnect, otherwise the 
@@ -620,37 +565,40 @@ class Base(object):
         """
         if self.socket:
             self._close(False)
-            print("--- %s: %s ---"% (
+            print("--- %s: %s ---" % (
                 self.config['name'],
                 self.config['host']
             ))
-            if self.config['verbose']: print("Connection closed.")
+            if self.config['verbose']:
+                print("Connection closed.")
             if 'disconnect' in self._hooks:
                 for func in self._hooks['disconnect']:
                     func(self)
-            
+
         if self.ERROR >= 10:
             print("There have been 10 or more failed attempts to reconnect.")
-            print("Please wait till the bot is able to do so, then press enter to try again.")
+            print(
+                "Please wait till the bot is able to do so, then press enter to try again.")
             raw_input('Press ENTER to continue')
         elif self.ERROR:
-            print("Error occurred (see stack trace). Waiting %d seconds to reconnect." %\
-                (30*self.ERROR+30))
+            print("Error occurred (see stack trace). Waiting %d seconds to reconnect." %
+                  (30*self.ERROR+30))
             pause(30*self.ERROR+30)
         elif self.config['reconnect']:
             # raw_input()
-            if self.config['verbose']: print("Waiting 10 seconds to reconnect...")
+            if self.config['verbose']:
+                print("Waiting 10 seconds to reconnect...")
             pause(8)
-            
+
         if self.config['reconnect']:
             pause(2)
-            if self.config['verbose']: print("Opening new connection...")
+            if self.config['verbose']:
+                print("Opening new connection...")
             self.connect()
         else:
             self.ERROR = 0
-            return
 
-    def connect(self):
+    def connect(self) -> None:
         '''
         Connects to the IRC server with the options defined in `config`
         '''
@@ -673,23 +621,23 @@ class Base(object):
             print(" ")
             print_tb(sys.exc_info()[2])
             print(" ")
-            f = open('%s - BotLog.txt'%self.config['name'],'a')
+            f = open('%s - BotLog.txt' % self.config['name'], 'a')
             f.write("\r\n")
             f.write(now())
-            f.write("\r\nConnection: %s\r\n"%self.config['host'])
-            print_exc(None,f)
+            f.write("\r\nConnection: %s\r\n" % self.config['host'])
+            print_exc(None, f)
             f.write("\r\n")
             f.close()
             self.reconnect()
         finally:
             self._close()
 
-    def _connect(self):
+    def _connect(self) -> None:
         """Sets socket connection and sends initial info to the server."""
         self.socket = socket.socket()
         self.socket.connect((self.config['host'], self.config['port']))
         self.socket.settimeout(1.0)
-        if self.config['verbose']: 
+        if self.config['verbose']:
             print("(%s: %s) Connection successful" % (
                 self.config['name'],
                 self.config['host']
@@ -697,14 +645,14 @@ class Base(object):
         self._cmd("CAP LS")
         self._cmd("NICK %s" % self.config['nick'])
         self._cmd("USER %s %s 0 :%s" % (
-            self.config['ident'], 
-            self.config['host'], 
+            self.config['ident'],
+            self.config['host'],
             self.config['realname']
         ))
         self._cmd("CAP REQ :multi-prefix")
         self._cmd("CAP END")
-            
-    def _close(self, runhooks=True):
+
+    def _close(self, runhooks: bool=True) -> None:
         if 'thread' in self._hooks:
             for thread in self._hooks['thread']:
                 thread.shutdown()
@@ -716,15 +664,15 @@ class Base(object):
             if 'close' in self._hooks:
                 for func in self._hooks['close']:
                     func(self)
-    
+
     @hook.queue()
-    def close(self):
+    def close(self) -> NoReturn:
         if self.config['verbose']:
-            print("Closing connection and thread for %s:%s"%\
-            (self.config['name'],self.config['host']))
+            print("Closing connection and thread for %s:%s" %
+                  (self.config['name'], self.config['host']))
         raise SystemExit()
 
-    def _listen(self):
+    def _listen(self) -> None:
         """
         Constantly listens to the input from the server. Since the messages come
         in pieces, we wait until we receive 1 or more full lines to start parsing.
@@ -745,11 +693,12 @@ class Base(object):
                 for line in temp:
                     # Strip \r from \r\n for RFC-compliant IRC servers.
                     line = line.rstrip('\r')
-                    if self.config['verbose']: print("(%s: %s) %s" % ()
-                            self.config['name'],
-                            self.config['host'],
-                            line
-                        )
+                    if self.config['verbose']:
+                        print("(%s: %s) %s" % ()
+                              self.config['name'],
+                              self.config['host'],
+                              line
+                              )
                     self._running = True
                     self._run_listeners(line)
                 if self.queue:
@@ -757,14 +706,14 @@ class Base(object):
                     self._run_queue()
                 self._running = False
 
-    def _run_listeners(self, line):
+    def _run_listeners(self, line: str) -> None:
         """
         Each listener's associated regular expression is matched against raw IRC
         input. If there is a match, the listener's associated function is called
         with all the regular expression's matched subgroups.
         """
-        for regex, dict in [(x,y) for x,y in self.listeners.iteritems()]:
-            temp = dict['temp'] == True
+        for regex, dict in [(x, y) for x, y in self.listeners.iteritems()]:
+            temp = dict['temp'] is True
             callbacks = dict['funcs']
             match = regex.match(line)
 
@@ -775,28 +724,29 @@ class Base(object):
                 callback(*match.groups())
             if temp:
                 del self.listeners[regex]
-        
+
         if 'once' in self._hooks:
-            for n,func in [(x,y) for x,y in enumerate(self._hooks['once'])]:
+            for n, func in [(x, y) for x, y in enumerate(self._hooks['once'])]:
                 groups = self._parsematch(func._matcher, line.strip())
                 if groups is not None:
-                    if isinstance(groups,dict):
+                    if isinstance(groups, dict):
                         func(**groups)
                     else:
                         func(*groups)
                     del self._hooks['once'][n]
-                
-    def _run_queue(self):
+
+    def _run_queue(self) -> None:
         while len(self.queued) > 0:
-            func,args,kwargs = self.queued.pop(0)
-            func(*args, **kwargs)       
-                
+            func, args, kwargs = self.queued.pop(0)
+            func(*args, **kwargs)
+
+
 class Bot(Base):
     """
     This class is a high-level wrapper for the base bot to allow for dynamic reloading of hooks.
-    
+
     Config Vars
-    
+
     host            (string)    : address to connect to
     port            (integer)   : port to connect with
     name            (string)    : bot's original name
@@ -820,71 +770,72 @@ class Bot(Base):
                                     interaction with other connections
     """
 
-    def __init__(self, host, **kwargs):
-        
-        super(Bot,self).__init__(host, **kwargs)
-        self.config.setdefault('hookscripts',[])
-        self.config.setdefault('reload_override',False)
+    def __init__(self, host: str, **kwargs) -> None:
+
+        super(Bot, self).__init__(host, **kwargs)
+        self.config.setdefault('hookscripts', [])
+        self.config.setdefault('reload_override', False)
         self.config.setdefault('ref', None)
-        
+
         self.load_hooks()
-        
+
         if not self.config['reload_override']:
             self.config.setdefault(
-                'reload_regex','^:(\S+) PRIVMSG (\S+) :\%sreload$' %\
+                'reload_regex', '^:(\S+) PRIVMSG (\S+) :\%sreload$' %
                 self.config['command']
             )
-            self.config.setdefault('reload_func',self.load_hooks)
+            self.config.setdefault('reload_func', self.load_hooks)
             self._add_raw_listener(
-                r'%s' %\
+                r'%s' %
                 self.config['reload_regex'],
                 self.config['reload_func']
             )
-        
-    def load_hooks(self):
+
+    def load_hooks(self) -> None:
         if callable(self.config['hookscripts']):
             try:
                 scripts = iter(self.config['hookscripts'])
             except TypeError:
                 scripts = self.config['hookscripts']()
-        elif isinstance(self.config['hookscripts'],basestring):
+        elif isinstance(self.config['hookscripts'], basestring):
             scripts = [self.config['hookscripts']]
         else:
             scripts = list(self.config['hookscripts'])
-            
-        old_funcs = [(k,v) for k,v in self.__dict__.iteritems() if hasattr(v,'_type')]
-        
-        if len(old_funcs) and self.config['verbose']: 
+
+        old_funcs = [(k, v) for k, v in self.__dict__.iteritems()
+                     if hasattr(v, '_type')]
+
+        if len(old_funcs) and self.config['verbose']:
             print("\n(%s: %s) Unloading old hooks..." % (
-                    self.config['name'],
-                    self.config['host']
-                ))
+                self.config['name'],
+                self.config['host']
+            ))
             print("----------------------")
-            
-        for k,v in old_funcs:
-            delattr(self,k)
-            if self.config['verbose']: 
+
+        for k, v in old_funcs:
+            delattr(self, k)
+            if self.config['verbose']:
                 print("(%s: %s)   -'%s' successfully removed." % (
                     self.config['name'],
                     self.config['host'],
                     k
                 ))
-                
-        if self.config['verbose']: 
+
+        if self.config['verbose']:
             print("\n(%s: %s) Loading hooks..." % (
                 self.config['name'],
                 self.config['host']
             ))
             print("----------------------")
-            
+
         for script in scripts:
             try:
                 if script in sys.modules:
                     reload(sys.modules[script])
                 else:
                     sys.modules[script] = __import__(script)
-                    
-                if self.config['verbose']: 
+
+                if self.config['verbose']:
                     print("\n(%s: %s) '%s' successfully imported." % (
                         self.config['name'],
                         self.config['host'],
@@ -904,30 +855,33 @@ class Bot(Base):
                         script
                     ))
             else:
-                for k,v in sys.modules[script].__dict__.iteritems():
-                    if hasattr(v,'_type'):
-                        setattr(self,k,v)
-                        if self.config['verbose']: 
+                for k, v in sys.modules[script].__dict__.iteritems():
+                    if hasattr(v, '_type'):
+                        setattr(self, k, v)
+                        if self.config['verbose']:
                             print("(%s: %s)   -'%s' successfully added." % (
                                 self.config['name'],
                                 self.config['host'],
                                 k
                             ))
         print(" ")
-        super(Bot,self).load_hooks()
-        
-    def ns(self, message):
+        super(Bot, self).load_hooks()
+
+    def ns(self, message: str) -> None:
         self.message("NickServ", message)
-        
-    def cs(self, message):
+
+    def cs(self, message: str) -> None:
         self.message("ChanServ", message)
 
-        
+
+T_Base = TypeVar('T_Base', bound=Base)
+
+
 class BotGroup(object):
-    def __init__(self, ref=Bot, interval=0):
+    def __init__(self, ref: T_Base=Bot, interval: int=0) -> None:
         """
         Constructor
-        
+
         ref = custom class reference to use for the bot instance.
         interval = time in seconds the bot instance threads are 
             checked for crash recovery. If zero, thread recovery 
@@ -937,32 +891,33 @@ class BotGroup(object):
         self.rethread = interval
         self.monitor = None
         self.ref = ref
-        
-    def __getitem__(self, host):
+
+    def __getitem__(self, host: str) -> str:
         """
         Convenince method to access bot instances via connected host.
         """
         return self._bots[host]['instance']
-        
-    def network(self, host, ref=None, **kwargs):
+
+    def network(self, host:str, ref: Optional[T_Base]=None, **kwargs) -> None:
         """
-        Method to declare a new network connection.
-        
+        Method to declare/re-declare a network connection.
+
         host = name of the host to connect to
         ref = optional custom reference to use for the bot instance
         kwargs = keyword arguements to be used for the bot's 
             configuration variables.
         """
-        if not isinstance(ref,Bot) or isinstance(ref,Base):
+        if ref is None:
             ref = self.ref
         self._bots[host] = {}
         self._bots[host]['instance'] = ref(host, ref=self, **kwargs)
         self._bots[host]['thread'] = Thread(
-            None, 
-            self._bots[host]['instance'].connect, 
-            name = host
+            None,
+            self._bots[host]['instance'].connect,
+            name=host
         )
-    def copy_network(self, old, new=None, ref=None):
+
+    def copy_network(self, old: str, new: Optional[str]=None, ref: Optional[T_Base]=None) -> None:
         """
         Convenince method that duplicates the config data 
             from an existing host to a new host.
@@ -970,13 +925,16 @@ class BotGroup(object):
         if not new:
             new = old
         if old in self._bots:
-            kwargs = self._bots[old]['instance'].config
-            self.network(new, ref=ref, **kwargs)
-        
-    def get(self, host):
+            bot = self._bots[old]['instance']
+            kwargs = bot.config
+            if (ref is None)
+                ref = bot.__class__
+            return ref(host, ref=self, **kwargs)
+
+    def get(self, host: str) -> Optional[T_Base]:
         return self._bots.get(host, None)
-        
-    def list(self, by=None):
+
+    def list(self, by: Optional[str]=None) -> List[Any]:
         """
         Conveneince method for accessing the bot dictionary via list.
         """
@@ -985,9 +943,9 @@ class BotGroup(object):
         elif by == 'bots':
             return [v for v in self._bots.itervalues()]
         else:
-            return [(k,v) for k,v in self._bots.iteritems()]
-            
-    def connect(self, contain=False):
+            return [(k, v) for k, v in self._bots.iteritems()]
+
+    def connect(self, contain: bool=False) -> None:
         """
         Method called to start the bot instance threads.
         Initialzes optional thread manager thread if specified.
@@ -999,14 +957,14 @@ class BotGroup(object):
         else:
             if self.rethread:
                 self.monitor = Timer(
-                    self.rethread, 
-                    self.thread_check, 
-                    name = 'BotStatusMonitor'
+                    self.rethread,
+                    self.thread_check,
+                    name='BotStatusMonitor'
                 )
                 self.monitor.start()
         if contain:
             console(self)
-            
+
     def load_hooks(self):
         """
         Convenince method to reload all hooks and restart
@@ -1015,26 +973,90 @@ class BotGroup(object):
         for x in self.list('bots'):
             x['instance'].load_hooks()
             x['instance']._runthreads()
-            
+
     def thread_check(self):
         """
         Method to check if bot instance threads have been killed.
         Restarts thread with fresh instance if so.
         """
-        for host,bot in self.list():
+        for host, bot in self.list():
             thread = bot['thread']
             if not thread.is_alive():
+                if (bot['instance'].config['verbose'])
+                    print(
+                        'Bot thread for %s died (see stack trace). Rebooting...' % host)
                 bot['instance'].close()
                 while bot['instance'].socket:
                     pass
-                new_bot = self.copy_network(bot.config['host'], bot.config['host'], self.__class__)
+                new_bot = self.copy_network(
+                    bot['instance'].config['host'], bot['instance'].config['host'], bot['instance'].__class__)
                 new_thread = Thread(
-                    None, 
-                    new_bot.connect, 
-                    name = thread.name
+                    None,
+                    new_bot.connect,
+                    name=thread.name
                 )
                 del self._bots[host]['thread']
+                del self._bost[host]['instance']
                 self._bots[host]['thread'] = new_thread
                 self._bots[host]['instance'] = new_bot
                 self._bots[host]['thread'].start()
-                
+
+
+T_Group = TypeVar('T_Group', BotGroup)
+
+
+def console(bot: Optional[Union[T_Base, T_Group]]=None, **vars) -> None:
+    """
+    Function for direct interaction via terminal.
+    Useful for testing, not advised for production code
+
+    Params:
+    -bot = Instance of the bot/botgroup you wish to control via console.
+    -vars = kwarg dict of global variables defined in the __main__ module give the console access to.
+    """
+
+    if vars:
+        # Define global access for variables passed to the function
+        for x, y in vars.iteritems():
+            globals()[x] = y
+
+    main = __import__('__main__')
+    for x, y in main.__dict__.iteritems():
+        if x != 'bot' and (isinstance(y, BotGroup) or isinstance(y, Base)):
+            # Creates local variable for the relevant variables from the __main__ module
+            locals()[x] = y
+            if x.lower() not in main.__dict__ or\
+                    not (
+                        isinstance(main.__dict__[x.lower()], BotGroup) or
+                        isinstance(main.__dict__[x.lower()], Base)
+            ):
+                # Alternate local variabe with all lowercase as the variable name
+                # as long as a variable by the same name won't be imported
+                locals()[x.lower()] = y
+
+    while True:  # Control loop
+        try:
+            a = raw_input()
+            print('===============')
+            print(eval(a))
+            print('===============')
+        except:
+            # Catch for exceptions to allow the console to continue operating.
+            print('>>>Exception occured: %s' % sys.exc_info()[1])
+            print_tb(sys.exc_info()[2])
+            print('===============')
+
+
+def modload(*modlist) -> None:
+    """
+    Convenince function for (re)loading custom modules.
+    """
+    for x in modlist:
+        # If exists, reload
+        if x in sys.modules:
+            reload(sys.modules[x])
+            print(x + ' has been reloaded.')
+        else:
+            # If not exists, import
+            sys.modules[x] = __import__(x)
+            print(x + ' has been loaded.')

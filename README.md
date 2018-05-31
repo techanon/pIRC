@@ -14,7 +14,7 @@ $ pip install pIRC
 ## Example Usages
 There are 3 pairs of ways to use this library.
 
-The first pair ways is to use the `Base` class for a single contained bot.
+The first pair of ways is to use the `Base` class for a single contained bot.
 
 You can instantiate it (which doesn't have much functionality on it's own):
 ```python
@@ -156,9 +156,15 @@ if __name__ == '__main__':
     botgroup.connect(True)
 ```
 Or you can instantiate it with an arguement that is a custom class that inherits from the `Bot` or `Base` classes to use as the default.
-You also have the option to specify a specific custom class per defined network via adding the `ref` keyword arguement to the `.network()` mwthod.
+You also have the option to specify a specific custom class per defined network via adding the `ref` keyword arguement to the `.network()` method.
 ```python
 import pIRC
+
+class CustomBase(pIRC.Base):
+
+    @pIRC.hooks.msg('^Hello$')
+    def greet(self, target, sender, *args):
+        self.message(target, "And a hello to you too, %s"%sender)
 
 class CustomBot(pIRC.Bot):
 
@@ -169,7 +175,7 @@ class CustomBot(pIRC.Bot):
 if __name__ == '__main__':
     botgroup = pIRC.BotGroup(CustomBase, 60)
     
-    botgroup.network('irc.website.com', ref = CustomBot,
+    botgroup.network('irc.website.com', ref = CustomBot, # will greet with "Howdy"
                         nick            = 'DaBot',
                         password        = 'thisisnotapassword',
                         names           = ['Hey Bot','Yo Bot'],
@@ -186,7 +192,7 @@ if __name__ == '__main__':
                         reload_override = True
                     )
                     
-    botgroup.network('irc.secondwebsite.com', 
+    botgroup.network('irc.secondwebsite.com',  # will greet with "Hello"
                         nick            = 'DaBot',
                         password        = 'thisisnotapassword',
                         names           = ['Hey Bot','Yo Bot'],
@@ -209,7 +215,7 @@ The second argument is the interval in seconds which the class uses to check the
 The argument on the `.connect()` method is for whether or not to contain the main thread in an input loop or not.
 If the argement is False (default value) the method returns for further processing if so desired.
 
-Unless there is a function that you want to override, there isn't a need to inherit `BotGroup` into a custom class.
+Unless there is a function that you want to override or add, there isn't a need to inherit `BotGroup` into a custom class.
 
 
 ## TODO

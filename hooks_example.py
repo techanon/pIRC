@@ -15,7 +15,7 @@ hooks.raw(regex)
     
 hooks.code(int, regex)
     This hook matches the given regex to each line that matches the three 
-    digit IRC code number given.
+    digit IRC code number given (remove any leading zeros).
     FUNCTION ARGUMENTS:
     1 - The executing bot's instance reference as self
     2 - The remaining *args or **kwargs returned from the regex match.
@@ -61,33 +61,36 @@ def repeat(self, target, sender, *args):
     """
     This function will execute when a recieved PRIVMSG contains 
     the command character followed by the matched regex.
-    
+
     EX: self.config['command'] = '!'
         <<< :nick!user@host.name PRIVMSG #chan-chan :!repeat What a glorious day
         >>> PRIVMSG #chan-chan :nick!user@host.name says What a glorious day
     """
-    self.message(target, "%s says %s"%(sender,args[1]))
+    self.message(target, "%s says %s" % (sender, args[1]))
+
 
 @hooks.msg('^how are you doing today Botty\?')
 def greeting_reply(self, target, sender, *args):
     """
     This function will execute when a recieved PRIVMSG contains 
     the matched regex.
-    
+
     EX: <<< :nick!user@host.name PRIVMSG #chan-chan :how are you doing today Botty?
         >>> PRIVMSG #chan-chan :I'm doing just fine, nick!user@host.name.
     """
-    self.message(target, "I'm doing just fine, %s."%sender)
-    
+    self.message(target, "I'm doing just fine, %s." % sender)
+
+
 @hooks.interval(15000)
 def promos(self):
     """
     This function will execute every 15 seconds
     """
-    chans = ['#chan1','#chan2','#chan3']
+    chans = ['#chan1', '#chan2', '#chan3']
     for chan in chans:
-        self.message(chan,"This is a promo message, get used to it.")
-    
+        self.message(chan, "This is a promo message, get used to it.")
+
+
 @hooks.raw('^:\S+ PING \S+ :YOU LOSE$')
 def game_over(self, *args):
     """
@@ -97,6 +100,3 @@ def game_over(self, *args):
     self.quit("I lost the game...")
     self.pause(5)
     self.reconnect()
-    
-    
-    
