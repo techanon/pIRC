@@ -34,13 +34,13 @@ class JobThread(threading.Thread):
             except:
                 if not self._error:
                     print(" ")
-                    print(">>>Exception occured in thread: %s"%sys.exc_info()[1])
+                    print(">>>Exception occured in thread: {0}".format(sys.exc_info()[1]))
                     print_tb(sys.exc_info()[2])
                     print(" ")
-                    f = open('%s - ThreadLog.txt'%self._ref.config['name'],'a')
+                    f = open('{0} - ThreadLog.txt'.format(self._ref.config['name'],'a'))
                     f.write("\r\n")
                     f.write(now())
-                    f.write("\r\nConnection: %s\r\n"%self._ref.config['host'])
+                    f.write("\r\nConnection: {0}\r\n".format(self._ref.config['host']))
                     print_exc(None,f)
                     f.write("\r\n")
                     f.close()
