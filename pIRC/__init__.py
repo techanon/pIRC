@@ -89,18 +89,18 @@ class Base(object):
         if self.__class__ == Base:
             self.load_hooks()
 
-    def _replace_match(self, match) -> Any:
-        if match.group(1) in self.config['replace']:
-            val = self.config['replace'][match.group(1)]
-            if callable(val):
-                return val()
-            else:
-                return val
-        else:
-            return ''
+    # def _replace_match(self, match) -> Any:
+    #     if match.group(1) in self.config['replace']:
+    #         val = self.config['replace'][match.group(1)]
+    #         if callable(val):
+    #             return val()
+    #         else:
+    #             return val
+    #     else:
+    #         return ''
 
-    def _matcher_replace(self, message: str) -> str: #TODO: figure out where to use this
-        matcher = re.sub(':(\w*):', self._replace_match, message)
+    # def _matcher_replace(self, message: str) -> str: #TODO: figure out where to use this
+    #     matcher = re.sub(':(\w*):', self._replace_match, message)
 
     def load_hooks(self) -> None:
         access = self.__class__
@@ -125,7 +125,7 @@ class Base(object):
     def _verb_listener(self, verb: str, func: Callable, temp: bool=False) -> None:
         self._listener({'verb': verb}, func, temp)
 
-    def _raw_listener(self, regex: str, func: Callable, temp: bool=False) -> None:
+    def _raw_listener(self, func: Callable, temp: bool=False) -> None:
         self._listener(True, func, temp)
 
     def _code_listener(self, num: int, func: Callable, temp: bool=False) -> None:
@@ -150,10 +150,10 @@ class Base(object):
 
         # Self management listeners
         # TODO: find out if these need to be converted to code commands
-        self._verb_listener('JOIN', self.manage_ulist)
-        self._verb_listener('PART', self.manage_ulist)
-        self._verb_listener('NICK', self.manage_ulist)
-        self._verb_listener('QUIT', self.manage_ulist)
+        self._verb_listener('JOIN', self._manage_ulist)
+        self._verb_listener('PART', self._manage_ulist)
+        self._verb_listener('NICK', self._manage_ulist)
+        self._verb_listener('QUIT', self._manage_ulist)
         
         self._verb_listener('MODE', self._ulist_modes)
         self._verb_listener('PING', self._ping)
@@ -280,9 +280,9 @@ class Base(object):
                     if not self._run_hooks(parser, 'chancommand'):
                         return
                 else:
-                    if not self._run_hooks(parser, 'privcommand')
+                    if not self._run_hooks(parser, 'privcommand'):
                         return
-                if not self._run_hooks(parser, 'command')
+                if not self._run_hooks(parser, 'command'):
                     return
             if info['target'].startswith('#'):
                 if not self._run_hooks(parser, 'channel'):
@@ -384,29 +384,32 @@ class Base(object):
 
 
     def _error(self, parser: T_Parser) -> None:
+        info = parser.data
         if not self._quitting:
             self.ERROR += 1
-            raise Exception(str(line))
+            raise Exception(str(info['params']))
         else:
             self._quitting = False
 
 
     def _ping(self, parser: T_Parser) -> None:
-        self._cmd("PONG", line)
+        info = parser.data
         if 'ping' in self._hooks:
             for func in self._hooks['ping']:
-                func(line)
+                func(info['params'])
 
 
     def _pong(self, parser: T_Parser) -> None:
+        info = parser.data
         if 'pong' in self._hooks:
             for func in self._hooks['pong']:
-                func(line)
+                func(info['params'])
 
 
     def _compile_isupport(self, parser: T_Parser) -> None: # 005
+        info = parser.data
         isupport = {}
-        for arg in args:
+        for arg in info['args']:
             if arg.find(' ') > -1:
                 break
             x = arg.split('=')
@@ -447,10 +450,9 @@ class Base(object):
 
     def _ulist_modes(self, parser: T_Parser) -> None:
         info = parser.data
-        target = info['args'][0]
+        user = info['args'][0]
         modes = info['args'][1]
         args = info['args'][2:]
-        #TODO: update usage to parser.data
         state = None
         offset = 0
         modes = list(modes)
@@ -475,22 +477,22 @@ class Base(object):
 
     def _manage_ulist(self, parser: T_Parser) -> None:
         info = parser.data
-
-
+        u = info['user']
+        args = info['args'][0]
         if info['verb'] == 'JOIN':
             self.ulist.setdefault(u, {})
-            self.ulist[u].update({args: ''})
+            self.ulist[u].update({'args': ''})
 
         elif info['verb'] == 'NICK':
             if u in self.ulist:
-                self.ulist[args] = self.ulist[u]
+                self.ulist[args] = self.ulist[u] # TODO: update args
                 del self.ulist[u]
             if self.config['nick'] == u:
                 self.config['nick'] = args
 
         elif info['verb'] == 'PART':
             if u == self.config['nick']:
-                for u in [x for x in self.ulist.iterkeys()]:
+                for u in [x for x in self.ulist.keys()]:
                     del self.ulist[u][args]
                     if not len(self.ulist[u]):
                         del self.ulist[u]
@@ -504,7 +506,7 @@ class Base(object):
             
 
     def _init_ping(self, message: str) -> None:
-        self.listeners.prepend({
+        self.listeners.insert(0, {
             'temp': True, 
             'func': self._init, 
             'match': {'command': 'PONG', 'args': ['_init_']} # verify
@@ -559,51 +561,50 @@ class Base(object):
     ### Functions that are common use case for sending commands to the server
 
     @hook.queue()
-    def message(self, targets: Union[List[str], str], messages: Union[List[Tuple[str, int]], List[str], str]) -> None:
-        if isinstance(targets, basestring):
+    def message(self, targets: Union[list[str], str], messages: Union[list[tuple[str, int]], list[str], str]) -> None:
+        if isinstance(targets, str):
             targets = [targets]
-        if isinstance(messages, basestring):
+        if isinstance(messages, str):
             messages = [messages]
         for y in messages:
             z = 1
             if isinstance(y, tuple) and len(y) == 2:
                 y, z = y
-            for x in target:
+            for x in targets:
                 self._cmd("PRIVMSG", x, str(y))
             pause(z)
 
     @hook.queue()
-    def notice(self, targets: Union[List[str], str], messages: Union[List[Tuple[str, int]], List[str], str]) -> None:
-        if isinstance(targets, basestring):
-            targets = [targes]
-        if isinstance(messages, basestring):
+    def notice(self, targets: Union[list[str], str], messages: Union[list[tuple[str, int]], list[str], str]) -> None:
+        if isinstance(targets, str):
+            targets = [targets]
+        if isinstance(messages, str):
             messages = [messages]
         for y in messages:
             z = 1
             if isinstance(y, tuple) and len(y) == 2:
                 y, z = y
-            for x in target:
+            for x in targets:
                 self._cmd("NOTICE", x, str(y))
             pause(z)
 
     @hook.queue()
-    def me(self, targets: Union[List[str], str], messages: Union[List[Tuple[str, int]], List[str], str]) -> None:
-        if isinstance(targets, basestring):
-            targets = [targes]
-        if isinstance(messages, basestring):
+    def me(self, targets: Union[list[str], str], messages: Union[list[tuple[str, int]], list[str], str]) -> None:
+        if isinstance(targets, str):
+            targets = [targets]
+        if isinstance(messages, str):
             messages = [messages]
         for y in messages:
             z = 1
             if isinstance(y, tuple) and len(y) == 2:
                 y, z = y
-            for x in target:
+            for x in targets:
                 self._cmd("PRIVMSG", x, "ACTION {}".format(y))
             pause(z)
 
     @hook.queue()
-    def join(self, *channels: Tuple[Union[str, tuple]]) -> None:
+    def join(self, *channels: tuple[Union[str, tuple]]) -> None:
         for chan in channels:
-            key = None
             if isinstance(chan, tuple):
                 self._cmd("JOIN", *chan)
             else:
@@ -611,7 +612,7 @@ class Base(object):
             self._cmd("MODE", chan)
 
     @hook.queue()
-    def part(self, *channels: Tuple[str]) -> None:
+    def part(self, *channels: tuple[str]) -> None:
         self._cmd("PART", ','.join(chan for chan in channels))
 
     @hook.queue()
@@ -676,7 +677,7 @@ class Base(object):
             print("There have been 10 or more failed attempts to reconnect.")
             print(
                 "Please wait till the bot is able to do so, then press enter to try again.")
-            raw_input('Press ENTER to continue')
+            input('Press ENTER to continue')
         elif self.ERROR:
             waittime = 30*self.ERROR+30
             print("Error occurred (see stack trace). Waiting {0} seconds to reconnect.".format(
@@ -684,7 +685,7 @@ class Base(object):
             ))
             pause(waittime)
         elif self.config['reconnect']:
-            # raw_input()
+            # input()
             if self.config['verbose']:
                 print("Waiting 10 seconds to reconnect...")
             pause(8)
@@ -746,7 +747,7 @@ class Base(object):
             ))
         self._cmd('CAP LS')
         self._cmd('NICK', self.config['nick'])
-        self._cmd('USER', self.config['ident'], config['host'], '0', self.config['realname'])
+        self._cmd('USER', self.config['ident'], self.config['host'], '0', self.config['realname'])
         self._cmd('CAP REQ :multi-prefix')
         self._cmd('CAP END')
 
@@ -809,20 +810,16 @@ class Bot(Base):
             'ref': None
         }, **kwargs)
 
-        self.load_hooks()
-
         if not self.config['reload_override']:
-            self.config.setdefault(
-                'reload_regex',
-                '^:(\S+) PRIVMSG (\S+) :{0}reload$'.format(
-                    self.config['command']
-                )
-            )
+            self.config.setdefault('reload_regex', re.compile(f":{self.config['command']}reload$"))
             self.config.setdefault('reload_func', self.load_hooks)
-            self._add_raw_listener(
-                self.config['reload_regex'],
+            self._listener(
+                {'verb': 'PRIVMSG', 'params': self.config['reload_regex']},
                 self.config['reload_func']
             )
+            
+        self.load_hooks()
+
 
     def load_hooks(self) -> None:
         if callable(self.config['hookscripts']):
@@ -830,7 +827,7 @@ class Bot(Base):
                 scripts = iter(self.config['hookscripts'])
             except TypeError:
                 scripts = self.config['hookscripts']()
-        elif isinstance(self.config['hookscripts'], basestring):
+        elif isinstance(self.config['hookscripts'], str):
             scripts = [self.config['hookscripts']]
         else:
             scripts = list(self.config['hookscripts'])
@@ -962,12 +959,12 @@ class BotGroup(object):
             kwargs = bot.config
             if (ref is None):
                 ref = bot.__class__
-            return ref(host, ref=self, **kwargs)
+            return ref(kwargs['host'], ref=self, **kwargs)
 
     def get(self, host: str) -> Optional[T_Base]:
         return self._bots.get(host, None)
 
-    def get_all(self, by: Optional[str]=None) -> List[Any]:
+    def get_all(self, by: Optional[str]=None) -> list:
         """
         Conveneince method for accessing the bot dictionary via list.
         """
@@ -991,8 +988,7 @@ class BotGroup(object):
             if self.rethread:
                 self.monitor = Timer(
                     self.rethread,
-                    self.thread_check,
-                    name='BotStatusMonitor'
+                    self.thread_check
                 )
                 self.monitor.start()
         if contain:
@@ -1029,7 +1025,7 @@ class BotGroup(object):
                     name=thread.name
                 )
                 del self._bots[host]['thread']
-                del self._bost[host]['instance']
+                del self._bots[host]['instance']
                 self._bots[host]['thread'] = new_thread
                 self._bots[host]['instance'] = new_bot
                 self._bots[host]['thread'].start()
@@ -1069,7 +1065,7 @@ def console(bot: Optional[Union[T_Base, T_Group]]=None, **kwargs) -> None:
 
     while True:  # Control loop
         try:
-            a = raw_input()
+            a = input()
             print('===============')
             print(eval(a))
             print('===============')
