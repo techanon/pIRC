@@ -1,6 +1,6 @@
 from functools import wraps
-from typing import Optional, Callable, Union
-from typing.re import Pattern
+import re
+from typing import Optional, Callable, Union, Pattern
 from .threads import JobThread
 
 # Special hook that allows the related function to be called from any thread
@@ -248,8 +248,6 @@ class action(object):
         message = self._match
         if message is None:
             message = re.compile('^{}$'.format(func.func_name.replace('_', ' ')))
-
-        match = {'message': message}
 
         @wraps(func)
         def wrapped_command(*args, **kwargs):

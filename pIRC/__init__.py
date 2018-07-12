@@ -6,7 +6,7 @@ from os import environ
 from time import sleep as pause
 from time import ctime as now
 from traceback import print_tb, print_exc
-from . import hooks as hook
+from . import hooks, threads, parse
 from .parse import RegexParser
 from threading import Thread, Timer
 from typing import TypeVar, Optional, Any, NoReturn, Union, Callable
@@ -560,7 +560,7 @@ class Base(object):
 
     ### Functions that are common use case for sending commands to the server
 
-    @hook.queue()
+    @hooks.queue()
     def message(self, targets: Union[list[str], str], messages: Union[list[tuple[str, int]], list[str], str]) -> None:
         if isinstance(targets, str):
             targets = [targets]
@@ -574,7 +574,7 @@ class Base(object):
                 self._cmd("PRIVMSG", x, str(y))
             pause(z)
 
-    @hook.queue()
+    @hooks.queue()
     def notice(self, targets: Union[list[str], str], messages: Union[list[tuple[str, int]], list[str], str]) -> None:
         if isinstance(targets, str):
             targets = [targets]
@@ -588,7 +588,7 @@ class Base(object):
                 self._cmd("NOTICE", x, str(y))
             pause(z)
 
-    @hook.queue()
+    @hooks.queue()
     def me(self, targets: Union[list[str], str], messages: Union[list[tuple[str, int]], list[str], str]) -> None:
         if isinstance(targets, str):
             targets = [targets]
@@ -602,7 +602,7 @@ class Base(object):
                 self._cmd("PRIVMSG", x, "ACTION {}".format(y))
             pause(z)
 
-    @hook.queue()
+    @hooks.queue()
     def join(self, *channels: tuple[Union[str, tuple]]) -> None:
         for chan in channels:
             if isinstance(chan, tuple):
@@ -611,21 +611,21 @@ class Base(object):
                 self._cmd("JOIN", chan)
             self._cmd("MODE", chan)
 
-    @hook.queue()
+    @hooks.queue()
     def part(self, *channels: tuple[str]) -> None:
         self._cmd("PART", ','.join(chan for chan in channels))
 
-    @hook.queue()
+    @hooks.queue()
     def nick(self, nick: Optional[str]=None) -> None:
         if nick is None:
             nick = self.config['name']
         self._cmd("NICK", nick)
 
-    @hook.queue()
+    @hooks.queue()
     def ping(self, line: str="timeout") -> None:
         self._cmd("PING", line)
 
-    @hook.queue()
+    @hooks.queue()
     def quit(self, message: str="Connection Closed") -> None:
         self._cmd("QUIT", message)
         self._quitting = True
@@ -633,7 +633,7 @@ class Base(object):
 
     # func that makes the bot's thread pasue for a given amount of seconds
 
-    @hook.queue()
+    @hooks.queue()
     def pause(self, time: int=1) -> None:
         pause(time)
 
@@ -651,7 +651,7 @@ class Base(object):
 
     #     return ''
 
-    @hook.queue()
+    @hooks.queue()
     def reconnect(self) -> None:
         """
         Function that executes an optional connection reset.
@@ -764,7 +764,7 @@ class Base(object):
                 for func in self._hooks['close']:
                     func(self)
 
-    @hook.queue()
+    @hooks.queue()
     def close(self) -> NoReturn:
         if self.config['verbose']:
             print("Closing connection and thread for {0}:{1}".format(

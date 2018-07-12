@@ -1,4 +1,5 @@
-﻿from pIRC import hooks
+﻿# pylint: disable=
+from pIRC import hooks
 
 """
 The hooks module is used for wrapping functions to prep the for use 
@@ -56,7 +57,7 @@ hooks.interval(int)
 """
 
 
-@hooks.command('^repeat (.*)$')
+@hooks.command(r'^repeat (.*)$')
 def repeat(self, target, sender, *args):
     """
     This function will execute when a recieved PRIVMSG contains 
@@ -69,7 +70,7 @@ def repeat(self, target, sender, *args):
     self.message(target, "%s says %s" % (sender, args[1]))
 
 
-@hooks.msg('^how are you doing today Botty\?')
+@hooks.privmsg(r'^how are you doing today Botty\?')
 def greeting_reply(self, target, sender, *args):
     """
     This function will execute when a recieved PRIVMSG contains 
@@ -91,7 +92,7 @@ def promos(self):
         self.message(chan, "This is a promo message, get used to it.")
 
 
-@hooks.raw('^:\S+ PING \S+ :YOU LOSE$')
+@hooks.raw(r'^:\S+ PING \S+ :YOU LOSE$')
 def game_over(self, *args):
     """
     This function will execute when a recieved line is a PING message 

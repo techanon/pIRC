@@ -5,6 +5,6 @@ setup(name='pIRC',
       description='A light, customizable python-based IRC bot library.',
       url='https://github.com/techborn/pIRC',
       author='Techborn',
-      author_email='unborntech@gmail.com',
+      author_email='unborntech@pm.me',
       license='Custom',
       packages=['pIRC'])
