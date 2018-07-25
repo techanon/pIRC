@@ -1,12 +1,37 @@
 from functools import wraps
 import re
-from typing import Optional, Callable, Union, Pattern
+from typing import Optional, Callable, Union, Pattern, Any
 from .threads import JobThread
+
+# utility functions for doing dynamic replacements in matches
+_replace_format = re.compile(r':(\w*):')
+
+def _replace_match(self, match) -> str:
+    if match[1] in self.config['replace']:
+        val = self.config['replace'][match[1]]
+        if callable(val):
+            return str(val(self))
+        else:
+            return str(val)
+    else:
+        return ''
+
+def _replace(self, original: Union[Pattern, str]) -> str:
+    if isinstance(original, Pattern):
+        matcher = re.sub(_replace_format, self._replace_match, original.pattern)
+        return re.compile(matcher)
+    else:
+        return re.sub(_replace_format, self._replace_match, original)
+
+
 
 # Special hook that allows the related function to be called from any thread
 # and then execute in the bot's actual thread. 
 # Basiclally it queues the function to be ran on the bot's own terms
 def queue():
+    """ 
+    TODO: Documentation 
+    """
     def wrapped(func: Callable):
         @wraps(func)
         def wrapped_command(*args, **kwargs):
@@ -16,6 +41,9 @@ def queue():
 
 # Hook that is triggered upon loading/reloading of 
 def load():
+    """ 
+    TODO: Documentation 
+    """
     def wrapped(func: Callable):
         @wraps(func)
         def wrapped_command(*args, **kwargs):
@@ -25,6 +53,9 @@ def load():
     return wrapped
 
 def close():
+    """ 
+    TODO: Documentation 
+    """
     def wrapped(func: Callable):
         @wraps(func)
         def wrapped_command(*args, **kwargs):
@@ -35,6 +66,9 @@ def close():
 
 
 def connect():
+    """ 
+    TODO: Documentation 
+    """
     def wrapped(func: Callable):
         @wraps(func)
         def wrapped_command(*args, **kwargs):
@@ -45,6 +79,9 @@ def connect():
 
 
 def disconnect():
+    """ 
+    TODO: Documentation 
+    """
     def wrapped(func: Callable):
         @wraps(func)
         def wrapped_command(*args, **kwargs):
@@ -56,60 +93,78 @@ def disconnect():
 ### Hooks that trigger on common verbs
 
 def ping():
+    """ 
+    TODO: Documentation 
+    """
     def wrapped(func: Callable):
         @wraps(func)
-        def wrapped_command(*args, **kwargs):
-            return func(*args, **kwargs)
+        def wrapped_command(_self, info):
+            return func(_self, info)
         wrapped_command._type = 'PING'
         return wrapped_command
     return wrapped
 
 
 def pong():
+    """ 
+    TODO: Documentation 
+    """
     def wrapped(func: Callable):
         @wraps(func)
-        def wrapped_command(*args, **kwargs):
-            return func(*args, **kwargs)
+        def wrapped_command(_self, info):
+            return func(_self, info)
         wrapped_command._type = 'PONG'
         return wrapped_command
     return wrapped
 
 
 def join():
+    """ 
+    TODO: Documentation 
+    """
     def wrapped(func: Callable):
         @wraps(func)
-        def wrapped_command(*args, **kwargs):
-            return func(*args, **kwargs)
+        def wrapped_command(_self, info):
+            return func(_self, info)
         wrapped_command._type = 'JOIN'
         return wrapped_command
     return wrapped
 
 
 def nick():
+    """ 
+    TODO: Documentation 
+    """
     def wrapped(func: Callable):
         @wraps(func)
-        def wrapped_command(*args, **kwargs):
-            return func(*args, **kwargs)
+        def wrapped_command(_self, info):
+            return func(_self, info)
         wrapped_command._type = 'NICK'
         return wrapped_command
     return wrapped
 
 
 def part():
+    """ 
+    TODO: Documentation 
+    """
     def wrapped(func: Callable):
         @wraps(func)
-        def wrapped_command(*args, **kwargs):
-            return func(*args, **kwargs)
+        def wrapped_command(_self, info):
+            return func(_self, info)
         wrapped_command._type = 'PART'
         return wrapped_command
     return wrapped
 
 
 def quit():
+    """ 
+    TODO: Documentation 
+    """
     def wrapped(func: Callable):
         @wraps(func)
-        def wrapped_command(*args, **kwargs):
-            return func(*args, **kwargs)
+        def wrapped_command(_self, info):
+            return func(_self, info)
         wrapped_command._type = 'QUIT'
         return wrapped_command
     return wrapped
@@ -118,6 +173,9 @@ def quit():
 ### Hooks that trigger on the PRVIMSG verb, custom match against the message
 
 class command(object):
+    """ 
+    TODO: Documentation 
+    """
     def __init__(self, match: Optional[Union[str, Pattern]]=None):
         self._match = match
 
@@ -131,7 +189,7 @@ class command(object):
         @wraps(func)
         def wrapped_command(_self, info):
             if isinstance(message, Pattern):
-                info['match'] = message.match(info['message'])
+                info['match'] = _replace(_self, message).match(info['message'])
             return func(_self, info)
         wrapped_command._type = 'COMMAND'
         wrapped_command._match = {'message': message}
@@ -139,6 +197,9 @@ class command(object):
 
 
 class chancommand(object):
+    """ 
+    TODO: Documentation 
+    """
     def __init__(self, match: Optional[Union[str, Pattern]]=None):
         self._match = match
 
@@ -152,7 +213,7 @@ class chancommand(object):
         @wraps(func)
         def wrapped_command(_self, info):
             if isinstance(message, Pattern):
-                info['match'] = message.match(info['message'])
+                info['match'] = _replace(_self, message).match(info['message'])
             return func(_self, info)
         wrapped_command._type = 'CHANCOMMAND'
         wrapped_command._match = {'message': message}
@@ -160,6 +221,9 @@ class chancommand(object):
 
 
 class privcommand(object):
+    """ 
+    TODO: Documentation 
+    """
     def __init__(self, match: Optional[Union[str, Pattern]]=None):
         self._match = match
 
@@ -173,7 +237,7 @@ class privcommand(object):
         @wraps(func)
         def wrapped_command(_self, info):
             if isinstance(message, Pattern):
-                info['match'] = message.match(info['message'])
+                info['match'] = _replace(_self, message).match(info['message'])
             return func(_self, info)
         wrapped_command._type = 'PRIVCOMMAND'
         wrapped_command._match = {'message': message}
@@ -181,6 +245,9 @@ class privcommand(object):
 
 
 class privmsg(object):
+    """ 
+    TODO: Documentation 
+    """
     # verb - PRIVMSG
     # Matches both direct and channel messages
     def __init__(self, match: Optional[Union[str, Pattern]]=None):
@@ -196,7 +263,7 @@ class privmsg(object):
         @wraps(func)
         def wrapped_command(_self, info):
             if isinstance(message, Pattern):
-                info['match'] = message.match(info['message'])
+                info['match'] = _replace(_self, message).match(info['message'])
             return func(_self, info)
         wrapped_command._type = 'PRIVMSG'
         wrapped_command._match = {'message': message}
@@ -204,6 +271,9 @@ class privmsg(object):
 
 
 class channel(object):
+    """ 
+    TODO: Documentation 
+    """
     # verb - PRIVMSG
     # args[0] - starts with # or &
     def __init__(self, match: Optional[Union[str, Pattern]]=None):
@@ -219,7 +289,7 @@ class channel(object):
         @wraps(func)
         def wrapped_command(_self, info):
             if isinstance(message, Pattern):
-                info['match'] = message.match(info['message'])
+                info['match'] = _replace(_self, message).match(info['message'])
             return func(_self, info)
         wrapped_command._type = 'CHANNEL'
         wrapped_command._match = {'message': message}
@@ -227,6 +297,9 @@ class channel(object):
 
 
 class private(object):
+    """ 
+    TODO: Documentation 
+    """
     # verb - PRIVMSG
     # args[0] - does /not/ start with a # or &
     def __init__(self, match: Optional[Union[str, Pattern]]=None):
@@ -242,7 +315,7 @@ class private(object):
         @wraps(func)
         def wrapped_command(_self, info):
             if isinstance(message, Pattern):
-                info['match'] = message.match(info['message'])
+                info['match'] = _replace(_self, message).match(info['message'])
             return func(_self, info)
         wrapped_command._type = 'PRIVATE'
         wrapped_command._match = {'message': message}
@@ -250,6 +323,9 @@ class private(object):
 
 
 class action(object):
+    """ 
+    TODO: Documentation 
+    """
     # verb - PRIVMSG
     # args[1] - ACTION
     def __init__(self, match: Optional[Union[str, Pattern]]=None):
@@ -265,7 +341,7 @@ class action(object):
         @wraps(func)
         def wrapped_command(_self, info):
             if isinstance(message, Pattern):
-                info['match'] = message.match(info['message'])
+                info['match'] = _replace(_self, message).match(info['message'])
             return func(_self, info)
         wrapped_command._type = 'ACTION'
         wrapped_command._match = {'message': message}
@@ -274,6 +350,9 @@ class action(object):
 ### Hooks that trigger on the NOTICE verb, custom match against the message
 
 class notice(object):
+    """ 
+    TODO: Documentation 
+    """
     # verb - NOTICE
     def __init__(self, match: Optional[Union[str, Pattern]]=None):
         self._match = match
@@ -288,7 +367,7 @@ class notice(object):
         @wraps(func)
         def wrapped_command(_self, info):
             if isinstance(message, Pattern):
-                info['match'] = message.match(info['message'])
+                info['match'] = _replace(_self, message).match(info['message'])
             return func(_self, info)
         wrapped_command._type = 'NOTICE'
         wrapped_command._match = {'message': message}
@@ -297,6 +376,9 @@ class notice(object):
 ### Hooks that trigger on a numeric verb
 
 class code(object):
+    """ 
+    TODO: Documentation 
+    """
     # verb - 3 digit number
     def __init__(self, code: int):
         if code > 999:
@@ -316,6 +398,9 @@ class code(object):
 ### Hooks that trigger for each incoming line, custom match against the whole line
 
 class raw(object):
+    """ 
+    TODO: Documentation 
+    """
     # Runs against unparsed line
     def __init__(self, match: Optional[Union[str, Pattern]]=None):
         self._match = match
@@ -328,7 +413,7 @@ class raw(object):
         @wraps(func)
         def wrapped_command(_self, info):
             if isinstance(match, Pattern):
-                info['match'] = match.match(info['raw'])
+                info['match'] = _replace(_self, match).match(info['raw'])
             return func(_self, info)
         wrapped_command._type = 'RAW'
         wrapped_command._match = {'raw': match}
@@ -337,6 +422,9 @@ class raw(object):
 ### Hooks that trigger on a specific interval or interval range in seconds, specify the min and max wait time
 
 def interval(min: int, max: Optional[int]=None):
+    """ 
+    TODO: Documentation 
+    """
     def wrapped(func):
         @wraps(func)
         def wrapped_command(*args, **kwargs):
@@ -358,6 +446,9 @@ def interval(min: int, max: Optional[int]=None):
 #   print("This will wait for a line with verb '420', run, then be removed from further execution")
 
 def once():
+    """ 
+    TODO: Documentation 
+    """
     def wrapped(func: Callable):
         if hasattr(func, '_type') and not hasattr(func, '_thread'):
             # only declare once on existing hooked functions that aren't threads

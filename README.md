@@ -24,13 +24,12 @@ if __name__ == '__main__':
     bot = pIRC.Base('irc.website.com', 
                         nick            = 'DaBot',
                         password        = 'thisisnotapassword',
-                        names           = ['Hey Bot','Yo Bot'],
                         channels        = ['#Chan-chan'],
                         realname        = 'pIRC Bot',
                         ident           = 'BOT',
                         command         = '$',
                         replace         = dict(
-                            me = 'self.config["nick"]'
+                            me = lambda _bot: _bot.config['nick']
                             ),
                         verbose         = True,
                         break_on_match  = False,
@@ -51,13 +50,12 @@ if __name__ == '__main__':
     bot = CustomBase('irc.website.com', 
                         nick            = 'DaBot',
                         password        = 'thisisnotapassword',
-                        names           = ['Hey Bot','Yo Bot'],
                         channels        = ['#Chan-chan'],
                         realname        = 'pIRC Bot',
                         ident           = 'BOT',
                         command         = '$',
                         replace         = dict(
-                            me = 'self.config["nick"]'
+                            me = 'Static Bot Name'
                             ),
                         verbose         = True,
                         break_on_match  = False,
@@ -74,13 +72,12 @@ if __name__ == '__main__':
     bot = pIRC.Bot('irc.website.com', 
                         nick            = 'DaBot',
                         password        = 'thisisnotapassword',
-                        names           = ['Hey Bot','Yo Bot'],
                         channels        = ['#Chan-chan'],
                         realname        = 'pIRC Bot',
                         ident           = 'BOT',
                         command         = '$',
                         replace         = dict(
-                            me = 'self.config["nick"]'
+                            me = lambda _bot: _bot.config['realname']
                             ),
                         verbose         = True,
                         break_on_match  = False,
@@ -103,24 +100,25 @@ if __name__ == '__main__':
     bot = CustomBot('irc.website.com', 
                         nick            = 'DaBot',
                         password        = 'thisisnotapassword',
-                        names           = ['Hey Bot','Yo Bot'],
                         channels        = ['#Chan-chan'],
                         realname        = 'pIRC Bot',
                         ident           = 'BOT',
                         command         = '$',
                         replace         = dict(
-                            me = 'self.config["nick"]'
+                            me = 'Botty'
                             ),
                         verbose         = True,
                         break_on_match  = False,
-                        hookscripts     = ['custom_hooks'],
+                        hookscripts     = ['custom.hooks'],
                         reload_override = True
                         )
     bot.connect()
 ```
 Notice the arguement `hookscripts`. 
-This option is a list of extensionless python filenames that contain functions wrapped in a `@pIRC.hooks` descriptor. 
+This option is a list of extensionless python filenames (using import notation) that contain functions wrapped in a `@pIRC.hooks` descriptor. 
 It allows the class to refence and use functions outside of the main file without having to make an interiting class.
+To load hooks, the file must be passed using the python DOT notation used for imports.
+Say you had a file like so: `custom/myhooks.py`. You would pass the following string: `custom.myhooks`.
 Descriptions of the other configuration variables are avaliable in the Bot class' DocString in the source.
 
 The thrid pair of ways give more functionality by allowing management of a single bot connecting to multiple networks by using the `BotGroup` class.
@@ -145,7 +143,7 @@ if __name__ == '__main__':
                         ident           = 'BOT',
                         command         = '$',
                         replace         = dict(
-                            me = 'self.config["nick"]'
+                            me = lambda _bot: _bot.config['nick']
                         ),
                         verbose         = True,
                         break_on_match  = False,
@@ -163,14 +161,14 @@ import pIRC
 class CustomBase(pIRC.Base):
 
     @pIRC.hooks.msg('^Hello$')
-    def greet(self, target, sender, *args):
-        self.message(target, "And a hello to you too, %s"%sender)
+    def greet(self, info):
+        self.message(info['target'], "And a hello to you too, {}".format(info['source']['nick']))
 
 class CustomBot(pIRC.Bot):
 
     @pIRC.hooks.msg('^Howdy$')
     def greet(self, target, sender, *args):
-        self.message(target, "And a howdy to you too, %s"%sender)
+        self.message(info['target'], "And a howdy to you too, {}".format(info['source']['nick']))
 
 if __name__ == '__main__':
     botgroup = pIRC.BotGroup(CustomBase, 60)
@@ -178,13 +176,12 @@ if __name__ == '__main__':
     botgroup.network('irc.website.com', ref = CustomBot, # will greet with "Howdy"
                         nick            = 'DaBot',
                         password        = 'thisisnotapassword',
-                        names           = ['Hey Bot','Yo Bot'],
                         channels        = ['#Chan-chan'],
                         realname        = 'pIRC Bot',
                         ident           = 'BOT',
                         command         = '$',
                         replace         = dict(
-                            me = 'self.config["nick"]'
+                            me = lambda _bot: _bot.config['nick']
                         ),
                         verbose         = True,
                         break_on_match  = False,
@@ -195,13 +192,12 @@ if __name__ == '__main__':
     botgroup.network('irc.secondwebsite.com',  # will greet with "Hello"
                         nick            = 'DaBot',
                         password        = 'thisisnotapassword',
-                        names           = ['Hey Bot','Yo Bot'],
                         channels        = ['#Chan-chan'],
                         realname        = 'pIRC Bot',
                         ident           = 'BOT',
                         command         = '$',
                         replace         = dict(
-                            me = 'self.config["nick"]'
+                            me = lambda _bot: _bot.config['nick']
                         ),
                         verbose         = True,
                         break_on_match  = False,
@@ -221,4 +217,4 @@ Unless there is a function that you want to override or add, there isn't a need 
 ## TODO
 * Better and more descriptive documentation
 * Add more default IRC controls
-* Fork and build against python 3.3
+* Fix up user/channel management caching

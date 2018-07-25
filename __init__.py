@@ -9,7 +9,7 @@ from traceback import print_tb, print_exc
 from . import hooks, threads, parse
 from .parse import Parser
 from threading import Thread, Timer
-from typing import TypeVar, Optional, Any, NoReturn, Union, Callable, List, Tuple
+from typing import TypeVar, Optional, Any, NoReturn, Union, Callable, List, Tuple, Pattern
 
 action_regex = re.compile(r"^ACTION (.*)")
 
@@ -93,21 +93,10 @@ class Base(object):
         if self.__class__ == Base:
             self.load_hooks()
 
-    def _replace_match(self, match) -> Any:
-        if match.group(1) in self.config['replace']:
-            val = self.config['replace'][match.group(1)]
-            if callable(val):
-                return val(self)
-            else:
-                return val
-        else:
-            return ''
-
-    def _matcher_replace(self, message: str) -> str: #TODO: figure out where to use this
-        matcher = re.sub(r':(\w*):', self._replace_match, message)
-        return matcher
-
     def load_hooks(self) -> None:
+        """ 
+        TODO: Documentation 
+        """
         access = self.__class__
         if 'hookscripts' in self.config:
             access = self
@@ -123,18 +112,33 @@ class Base(object):
         self._run_hooks('load')
 
     def trigger(self, match: Union[dict, bool], func: Callable, temp: bool=False) -> None:
+        """ 
+        TODO: Documentation 
+        """
         self.listeners.append({'match': match, 'func': func, 'temp': temp})
 
     def on_verb(self, verb: str, func: Callable, temp: bool=False) -> None:
+        """ 
+        TODO: Documentation 
+        """
         self.trigger({'verb': verb}, func, temp)
 
     def on_code(self, num: int, func: Callable, temp: bool=False) -> None:
+        """ 
+        TODO: Documentation 
+        """
         self.trigger({'verb': '{:03d}'.format(num)}, func, temp)
 
     def on_raw(self, func: Callable, temp: bool=False) -> None:
+        """ 
+        TODO: Documentation 
+        """
         self.trigger(True, func, temp)
 
     def on(self, verb: Union[str, int, Callable], func: Callable = None) -> None:
+        """ 
+        TODO: Documentation 
+        """
         if type(verb) == int:
             self.on_code(verb, func)
         elif type(verb) == str:
@@ -143,6 +147,9 @@ class Base(object):
             self.on_raw(verb)
 
     def once(self, verb: Union[str, int, Callable], func: Callable = None) -> None:
+        """ 
+        TODO: Documentation 
+        """
         if type(verb) == int:
             self.on_code(verb, func, True)
         elif type(verb) == str:
@@ -151,17 +158,25 @@ class Base(object):
             self.on_raw(verb, True)
 
     def off(self, verb: Union[str, int, Callable], func: Callable = None) -> None:
+        """ 
+        TODO: Documentation 
+        """
         pass
 
     def _add_listeners(self) -> None:
+        """ 
+        TODO: Documentation 
+        """
         # Custom hooks listeners
         self._add_codes()
         self._add_commands()
         self.on_raw(self._run_RAW)  # Catch ALL incoming messages
 
     def _add_codes(self) -> None:
+        """ 
+        TODO: Documentation 
+        """
         # Default code commands for bot state management
-        self.on_code(1, self._001_post_register)
         self.on_code(5, self._005_compile_isupport)
         self.on_code(353, self._353_compile_ulist)
         self.on_code(443, self._443_alt_nick)
@@ -169,6 +184,9 @@ class Base(object):
         self.on_verb(re.compile(r'^\d{3}$'), self._run_CODES)
 
     def _add_commands(self) -> None:
+        """ 
+        TODO: Documentation 
+        """
 
         # Self management listeners
         # TODO: find out if these need to be converted to code commands
@@ -233,6 +251,9 @@ class Base(object):
                 self._running = False
 
     def _run_hooks(self, key: str, info: Optional[T_Parser] = None, once: Optional[bool] = None) -> bool:
+        """ 
+        TODO: Documentation 
+        """
         if key in self._hooks:
             for n, func in enumerate(self._hooks[key]):
                 if info is None:
@@ -251,6 +272,9 @@ class Base(object):
         return True
 
     def _run_threads(self) -> True:
+        """ 
+        TODO: Documentation 
+        """
         if 'thread' in self._hooks:
             for n, thread in enumerate(self._hooks['thread']):
                 if thread.is_shutdown() or thread.is_alive():
@@ -286,6 +310,9 @@ class Base(object):
         self._run_hooks('once', info, True)
 
     def _run_PRIVMSG(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         info['target'] = info['args'][0]
         info['message'] = info['args'][1]
 
@@ -315,68 +342,104 @@ class Base(object):
                 return
 
     def _run_NOTICE(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         info['target'] = info['args'][0]
         info['message'] = info['args'][-1]
         if not self._run_hooks('notice', info):
             return
 
     def _run_QUIT(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         info['target'] = info['args'][0]
         info['message'] = info['args'][-1]
         if not self._run_hooks('quit', info):
             return
 
     def _run_PART(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         info['target'] = info['args'][0]
         info['message'] = info['args'][-1]
         if not self._run_hooks('part', info):
             return
 
     def _run_NICK(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         info['target'] = info['args'][0]
         info['message'] = info['args'][-1]
         if not self._run_hooks('nick', info):
             return
 
     def _run_JOIN(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         info['target'] = info['args'][0]
         if not self._run_hooks('join', info):
             return
 
     def _run_MODE(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         info['target'] = info['args'][0]
         info['message'] = info['args'][-1]
         if not self._run_hooks('mode', info):
             return
 
     def _run_PING(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         info['target'] = None
         info['message'] = info['args'][-1]
         if not self._run_hooks('ping', info):
             return
 
     def _run_PONG(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         info['target'] = info['args'][0]
         info['message'] = info['args'][-1]
         if not self._run_hooks('pong', info):
             return
 
     def _run_ERROR(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         info['target'] = info['args'][0]
         info['message'] = info['args'][-1]
         if not self._run_hooks('error', info):
             return
 
     def _run_CODES(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         info['target'] = info['args'][0]
         if not self._run_hooks('error', info):
             return
 
     def _run_RAW(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         if not self._run_hooks('raw', info):
             return
 
     def _on_error(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         if not self._quitting:
             self.ERROR += 1
             raise Exception(info['args'][-1])
@@ -384,12 +447,21 @@ class Base(object):
             self._quitting = False
 
     def _on_ping(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         self._cmd('PONG', info['args'][-1])
 
     def _on_pong(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         pass
 
     def _005_compile_isupport(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         isupport = {}
         for arg in info['args']:
             if arg.find(' ') > -1:
@@ -405,6 +477,9 @@ class Base(object):
             self.isupport['PREFIX'].extend(zip(match.group(1), match.group(2)))
 
     def _353_compile_ulist(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         if info['args'][0] == '=': # TODO: implement type properly
             info['args'].pop(0)
         channel, args, *rest = info['args']
@@ -428,14 +503,23 @@ class Base(object):
                 self.ulist[user].update({channel: ''})
 
     def _443_alt_nick(self) -> None:
+        """ 
+        TODO: Documentation 
+        """
         self.config['nick'] += '_'
         self.nick(self.config['nick'])
 
     def _on_mode(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         pass
         # self._ulist_modes(info)  # placeholder
 
     def _ulist_modes(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         user, modes, *args = info['args']
         state = None
         offset = 0
@@ -458,22 +542,37 @@ class Base(object):
                     )
 
     def _on_join(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         self._manage_ulist(info)  # placeholder
         pass
 
     def _on_part(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         # self._manage_ulist(info)  # placeholder
         pass
 
     def _on_nick(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         # self._manage_ulist(info)  # placeholder
         pass
 
     def _on_quit(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         # self._manage_ulist(info)  # placeholder
         pass
 
     def _manage_ulist(self, info: T_Parser) -> None:
+        """ 
+        TODO: Documentation 
+        """
         u = info['source']['user']
         args = info['args'][0]
         if info['verb'] == 'JOIN':
@@ -502,9 +601,6 @@ class Base(object):
             if u in self.ulist:
                 del self.ulist[u]
 
-    def _001_post_register(self, message: str) -> None:
-        pass
-
         # self.listeners.insert(0, {
         #     'temp': True,
         #     'func': self._init,
@@ -513,6 +609,9 @@ class Base(object):
         # self.ping('_init_')
 
     def _init(self) -> None:
+        """ 
+        TODO: Documentation 
+        """
         if self.config['passphrase']:
             self._cmd("PRIVMSG", "NickServ", "identify {}".format(
                 self.config['passphrase']))
@@ -526,11 +625,12 @@ class Base(object):
         # TODO: This doesn't ensure that threads run at the right time, e.g.
         # after the bot has joined every channel it needs to.
         self._run_threads()
-        if 'connect' in self._hooks:
-            for func in self._hooks['connect']:
-                func(self)
+        self._run_hooks('connect')
 
     def queue(self, func: Callable, *args, **kwargs) -> None:
+        """ 
+        TODO: Documentation 
+        """
         self.queued.append((func, args, kwargs))
 
     def _cmd(self, cmd: str, *args) -> None:
@@ -563,6 +663,9 @@ class Base(object):
 
     @hooks.queue()
     def message(self, targets: Union[List[str], str], messages: Union[List[Tuple[str, int]], List[str], str]) -> None:
+        """ 
+        TODO: Documentation 
+        """
         if isinstance(targets, str):
             targets = [targets]
         if isinstance(messages, str):
@@ -577,6 +680,9 @@ class Base(object):
 
     @hooks.queue()
     def notice(self, targets: Union[List[str], str], messages: Union[List[Tuple[str, int]], List[str], str]) -> None:
+        """ 
+        TODO: Documentation 
+        """
         if isinstance(targets, str):
             targets = [targets]
         if isinstance(messages, str):
@@ -591,6 +697,9 @@ class Base(object):
 
     @hooks.queue()
     def me(self, targets: Union[List[str], str], messages: Union[List[Tuple[str, int]], List[str], str]) -> None:
+        """ 
+        TODO: Documentation 
+        """
         if isinstance(targets, str):
             targets = [targets]
         if isinstance(messages, str):
@@ -605,6 +714,9 @@ class Base(object):
 
     @hooks.queue()
     def join(self, *channels: Tuple[Union[str, tuple]]) -> None:
+        """ 
+        TODO: Documentation 
+        """
         for chan in channels:
             if isinstance(chan, tuple):
                 self._cmd("JOIN", *chan)
@@ -614,20 +726,32 @@ class Base(object):
 
     @hooks.queue()
     def part(self, *channels: Tuple[str]) -> None:
+        """ 
+        TODO: Documentation 
+        """
         self._cmd("PART", ','.join(chan for chan in channels))
 
     @hooks.queue()
     def nick(self, nick: Optional[str]=None) -> None:
+        """ 
+        TODO: Documentation 
+        """
         if nick is None:
             nick = self.config['name']
         self._cmd("NICK", nick)
 
     @hooks.queue()
     def ping(self, line: str="timeout") -> None:
+        """ 
+        TODO: Documentation 
+        """
         self._cmd("PING", line)
 
     @hooks.queue()
     def quit(self, message: str="Connection Closed") -> None:
+        """ 
+        TODO: Documentation 
+        """
         self._cmd("QUIT", message)
         self._quitting = True
         self._close()
@@ -636,6 +760,9 @@ class Base(object):
 
     @hooks.queue()
     def pause(self, time: int=1) -> None:
+        """ 
+        TODO: Documentation 
+        """
         pause(time)
 
     # def color(self, matcher) -> str:
@@ -670,9 +797,7 @@ class Base(object):
             ))
             if self.config['verbose']:
                 print("Connection closed.")
-            if 'disconnect' in self._hooks:
-                for func in self._hooks['disconnect']:
-                    func(self)
+            self._run_hooks('disconnect')
 
         if self.ERROR >= 10:
             print("There have been 10 or more failed attempts to reconnect.")
@@ -681,9 +806,7 @@ class Base(object):
             input('Press ENTER to continue')
         elif self.ERROR:
             waittime = 30*self.ERROR+30
-            print("Error occurred (see stack trace). Waiting {0} seconds to reconnect.".format(
-                waittime
-            ))
+            print(f"Error occurred (see stack trace). Waiting {waittime} seconds to reconnect.")
             pause(waittime)
         elif self.config['reconnect']:
             # input()
@@ -737,7 +860,9 @@ class Base(object):
                 break
 
     def _connect(self) -> None:
-        """Sets socket connection and negotiates capabilites and registration"""
+        """
+        Sets socket connection and negotiates capabilites and registration
+        """
         self.socket = socket.socket()
         self.socket.connect((self.config['host'], self.config['port']))
         self.socket.settimeout(1.0)
@@ -764,7 +889,7 @@ class Base(object):
             self._cmd('CAP END')
 
         def _CONNECTED(info):
-            """Do initial connection commands"""
+            """Do connection post-negotiation commands"""
             if len(self.config['channels']):
                 self.join(*self.config['channels'])
 
@@ -783,6 +908,9 @@ class Base(object):
         self._cmd('NICK', self.config['nick'])
 
     def _close(self, runhooks: bool=True) -> None:
+        """ 
+        TODO: Documentation 
+        """
         if 'thread' in self._hooks:
             for thread in self._hooks['thread']:
                 thread.shutdown()
@@ -795,6 +923,9 @@ class Base(object):
 
     @hooks.queue()
     def close(self) -> NoReturn:
+        """ 
+        TODO: Documentation 
+        """
         if self.config['verbose']:
             print("Closing connection and thread for {0}:{1}".format(
                 self.config['name'],
@@ -851,6 +982,9 @@ class Bot(Base):
         self.load_hooks()
 
     def load_hooks(self) -> None:
+        """ 
+        TODO: Documentation 
+        """
         if callable(self.config['hookscripts']):
             try:
                 scripts = iter(self.config['hookscripts'])
@@ -927,9 +1061,15 @@ class Bot(Base):
         super(Bot, self).load_hooks()
 
     def ns(self, message: str) -> None:
+        """ 
+        TODO: Documentation 
+        """
         self.message("NickServ", message)
 
     def cs(self, message: str) -> None:
+        """ 
+        TODO: Documentation 
+        """
         self.message("ChanServ", message)
 
 
@@ -992,6 +1132,9 @@ class BotGroup(object):
             return ref(kwargs['host'], ref=self, **kwargs)
 
     def get(self, host: str) -> Optional[T_Base]:
+        """ 
+        Convenince method to access a bot via connected its host. 
+        """
         return self._bots.get(host, None)
 
     def get_all(self, by: Optional[str]=None) -> list:
@@ -1060,7 +1203,14 @@ class BotGroup(object):
                 self._bots[host]['instance'] = new_bot
                 self._bots[host]['thread'].start()
 
+    def broadcast(self, action: Callable, *args, exclude: T_Base=None):
+        """ TODO: Documentation """
+        for bot in self.get_all('bots'):
+            if exclude is bot['instance']: continue
+            action(bot['instance'], *args)
+
     def close(self):
+        """ TODO: Documentation """
         if not self._quitting:
             self._quitting = True
             for bot in self.get_all('bots'):
@@ -1068,7 +1218,6 @@ class BotGroup(object):
             if self.monitor:
                 self.monitor.cancel()
             print('Waiting for threads to close...')
-            pause(1)
 
 
 T_Group = TypeVar('T_Group', bound=BotGroup)

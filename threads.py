@@ -5,7 +5,9 @@ from random import randint
 from time import ctime as now
 
 class JobThread(threading.Thread):
-    """Thread that executes a job every N milliseconds"""
+    """
+    Thread that executes a job every N milliseconds
+    """
 
     def __init__(self, func, ref):
         threading.Thread.__init__(self)
@@ -18,14 +20,21 @@ class JobThread(threading.Thread):
         return self.__class__(self._func, self._ref)
 
     def shutdown(self):
-        """Stop this thread"""
+        """
+        Stop this thread
+        """
         self._finished.set()
         
     def is_shutdown(self):
+        """ 
+        Boolean check on the thread's state 
+        """
         return bool(self._finished.isSet())
 
     def run(self):
-        """Keep running this thread until it's stopped"""
+        """
+        Keep running this thread until it's shutdown
+        """
         self._finished.wait(10)
         while not self._finished.isSet():
             try:

@@ -67,17 +67,29 @@ def _match_args(source: list, target: list) -> bool:
 
 
 class Parser:
+    """ 
+    TODO: Documentation 
+    """
     def __init__(self, line: Optional[str] = None):
         self.data = {}
         if line: self.parse(line)
 
     def __getitem__(self, key):
+        """ 
+        TODO: Documentation 
+        """
         return self.data[key]
 
     def __setitem__(self, key, value):
+        """ 
+        TODO: Documentation 
+        """
         self.data[key] = value
 
     def parse(self, line: str) -> None:
+        """ 
+        TODO: Documentation 
+        """
         self.data = {
             'raw': line,
             'tags': None,
@@ -127,6 +139,9 @@ class Parser:
         self.data['args'] = args
 
     def compare(self, kwargs) -> bool:
+        """ 
+        TODO: Documentation 
+        """
         for k, v in kwargs.items():
             if k == 'tags':  # self.data[k] is a dynamic dict
                 if isinstance(v, dict) or isinstance(v, tuple) or isinstance(v, str):  # allowed types
@@ -137,8 +152,7 @@ class Parser:
                     if not _match_tags(v, self.data[k]):
                         return False
                 else:
-                    raise Exception(
-                        "Invalid type for {}: {}".format(k, type(v)))
+                    raise Exception(f"Invalid type for {k}: {type(v)}")
 
             elif k == 'source': # self.data[k] is a limited dict
                 if isinstance(v, Pattern) or isinstance(v, tuple) or isinstance(v, str): # raw source match
@@ -154,8 +168,7 @@ class Parser:
                             raise Exception(
                                 "Invalid type for {}[{}]: {}".format(k, o, type(v)))
                 else:
-                    raise Exception(
-                        "Invalid type for {}: {}".format(k, type(v)))
+                    raise Exception(f"Invalid type for {k}: {type(v)}")
 
 
             elif k == 'args':  # self.data[k] is an array
@@ -165,8 +178,7 @@ class Parser:
                     if not _match_args(v, self.data[k]):
                         return False
                 else:
-                    raise Exception(
-                        "Invalid type for {}: {}".format(k, type(v)))
+                    raise Exception(f"Invalid type for {k}: {type(v)}")
 
             # self.data[k] is a string
             else:
@@ -174,6 +186,5 @@ class Parser:
                     if not _match_check(v, self.data[k]):
                         return False
                 else:
-                    raise Exception(
-                        "Invalid type for {}: {}".format(k, type(v)))
+                    raise Exception(f"Invalid type for {k}: {type(v)}")
         return True

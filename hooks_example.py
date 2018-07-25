@@ -1,5 +1,6 @@
 ﻿# pylint: disable=
 from pIRC import hooks
+from re import compile as re
 
 """
 The hooks module is used for wrapping functions to prep the for use 
@@ -57,8 +58,8 @@ hooks.interval(int)
 """
 
 
-@hooks.command(r'^repeat (.*)$')
-def repeat(self, target, sender, *args):
+@hooks.command(re(r'^repeat (.*)$'))
+def repeat(self, info):
     """
     This function will execute when a recieved PRIVMSG contains 
     the command character followed by the matched regex.
@@ -67,11 +68,11 @@ def repeat(self, target, sender, *args):
         <<< :nick!user@host.name PRIVMSG #chan-chan :!repeat What a glorious day
         >>> PRIVMSG #chan-chan :nick!user@host.name says What a glorious day
     """
-    self.message(target, "%s says %s" % (sender, args[1]))
+    self.message(info['target'], "{} says {}".format(info['source']['nick'], info['match']))
 
 
-@hooks.privmsg(r'^how are you doing today Botty\?')
-def greeting_reply(self, target, sender, *args):
+@hooks.privmsg(re(r'^how are you doing today Botty\?'))
+def greeting_reply(self, info):
     """
     This function will execute when a recieved PRIVMSG contains 
     the matched regex.
@@ -79,7 +80,7 @@ def greeting_reply(self, target, sender, *args):
     EX: <<< :nick!user@host.name PRIVMSG #chan-chan :how are you doing today Botty?
         >>> PRIVMSG #chan-chan :I'm doing just fine, nick!user@host.name.
     """
-    self.message(target, "I'm doing just fine, %s." % sender)
+    self.message(info['target'], "I'm doing just fine, {}.".format(info['source']['nick']))
 
 
 @hooks.interval(15000)
@@ -92,8 +93,8 @@ def promos(self):
         self.message(chan, "This is a promo message, get used to it.")
 
 
-@hooks.raw(r'^:\S+ PING \S+ :YOU LOSE$')
-def game_over(self, *args):
+@hooks.raw(re(r'^:\S+ PING \S+ :YOU LOSE$'))
+def game_over(self, info):
     """
     This function will execute when a recieved line is a PING message 
     and contains the message 'YOU LOSE'.
