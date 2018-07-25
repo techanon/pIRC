@@ -1,33 +1,11 @@
 
 import re
-from typing import Optional, Any, Union, Callable
-from typing.re import Pattern
+from typing import Optional, Any, Union, Callable, Pattern
 
-def _prep_regex() -> Tuple:
-    nick = r'[a-zA-Z][a-zA-Z0-9\[\]\\\'\`\^\{\}-]*'
-    user = r'[^\r\n\0 ]+'
-    host = r'[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]'
-
-    prefix_parse = r'^(?:(?P<nick>{nick})(?:!(?P<user>{user}))?@)?(?P<host>{host})$'.format(
-        host=host, nick=nick, user=user
-    )
-    prefix = r'(?P<prefix>(?:{nick}(?:!{user})?@)?{host})'.format(
-        host=host, nick=nick, user=user
-    )
-    verb = r'(?P<verb>[a-zA-Z]+|[0-9]{3})'
-    params = r'(?P<params>[^:\r\n\0]*(?::[^:\r\n\0]*)*)'
-
-    message = r'^(?::{prefix} +)?{verb} +{params}$'.format(
-        prefix=prefix, verb=verb, params=params
-    )
-    return (re.compile(message, re.IGNORECASE), re.compile(prefix_parse, re.IGNORECASE))
-
-_message_regex, _prefix_regex = _prep_regex()
-del _prep_regex
 
 
 def _match_check(source: Union[Pattern, tuple, str], target: str) -> bool:
-    if isinstance(source, tuple): # match for any
+    if isinstance(source, tuple):  # match for any
         for val in source:
             if _match_check(val, target):
                 break
@@ -44,6 +22,7 @@ def _match_check(source: Union[Pattern, tuple, str], target: str) -> bool:
 
     return True
 
+
 def _match_tags(source: Union[dict, tuple, str], target: dict) -> bool:
     for r, s in target.items():
         if isinstance(source, dict):
@@ -53,7 +32,7 @@ def _match_tags(source: Union[dict, tuple, str], target: dict) -> bool:
                 if not _match_check(y, s):  # check value match
                     return False
 
-        elif isinstance(source, tuple): # check against keys only
+        elif isinstance(source, tuple):  # check against keys only
             for x in source:
                 if _match_check(x, r):  # check key match
                     break
@@ -66,13 +45,14 @@ def _match_tags(source: Union[dict, tuple, str], target: dict) -> bool:
 
     return True
 
+
 def _match_args(source: list, target: list) -> bool:
     for i, x in enumerate(source):
         if i + 1 > len(target):
             break
-        y = source[i] 
+        y = source[i]
         if y is None:
-            continue # skip current argument index
+            continue  # skip current argument index
         if isinstance(y, tuple):
             for z in y:
                 if _match_check(z, x):
@@ -86,63 +66,114 @@ def _match_args(source: list, target: list) -> bool:
     return True
 
 
-
-class RegexParser:
-    def __init__(self, message: Optional[str]):
-        self.raw = None
+class Parser:
+    def __init__(self, line: Optional[str] = None):
         self.data = {}
-        if message: 
-            self.line(message)
+        if line: self.parse(line)
 
-    def line(self, message: str) -> None:
-        match = _message_regex.match(message)
-        if (match is None):
-            return
-        tmp = match.groupdict()
-        self.raw = message
+    def __getitem__(self, key):
+        return self.data[key]
 
-        # tags, prefix, verb, params
-        self.data = {**tmp}
+    def __setitem__(self, key, value):
+        self.data[key] = value
 
-        match = _prefix_regex.match(self.data['prefix'])
-        match = match.groupdict()
-        # host, user, nick
-        self.data = {**self.data, **match}
+    def parse(self, line: str) -> None:
+        self.data = {
+            'raw': line,
+            'tags': None,
+            'source': None,
+            'verb': None,
+            'args': []
+        }
 
-        self.data['args'] = []
-        self.data['args'] += self.data['params'][:self.data['params'].find(':')].strip().split(' ')
-        self.data['args'] += self.data['params'][self.data['params'].find(':')+1:].rstrip(' :').split(':')
+        args = line.split(' ')
+        if args[0].startswith('@'):
+            # process message tags
+            self.data['tags'] = {}
+            tags = args.pop(0).lstrip('@')
+            for x in tags.split(';'):
+                if len(x):
+                    y = tuple(x.split('='))
+                    if len(y) == 1:
+                        y += (True,)
+                    if len(y[0]) > 0:
+                        self.data['tags'][y[0]] = y[1]
 
-    def compare(self, **kwargs) -> bool:
+        if args[0].startswith(':'):
+            # process message source
+            source = args.pop(0).lstrip(':')
+            self.data['source'] = {}
+            user = nick = host = None
+            if source.find('@') > -1:
+                front, host = tuple(source.split('@'))
+                if len(front):
+                    if front.find('!') > -1:
+                        nick, user = tuple(front.split('!'))
+                    else:
+                        nick = front
+            else:
+                host = source
+            self.data['source']['raw'] = source
+            self.data['source']['host'] = host
+            self.data['source']['user'] = user
+            self.data['source']['nick'] = nick
+
+        self.data['verb'] = args.pop(0)
+
+        for i, arg in enumerate(args):
+            if arg.startswith(':'): #process trailing arg
+                args = args[:i] + [' '.join(args[i:]).lstrip(':')]
+                break
+        self.data['args'] = args
+
+    def compare(self, kwargs) -> bool:
         for k, v in kwargs.items():
-            if k == 'tags':  # self.data[k] is a dict
-                if isinstance(v, dict) or isinstance(v, tuple) or isinstance(v, str): # allowed types
-                    if isinstance(v, tuple): # keys only, convert to dict
+            if k == 'tags':  # self.data[k] is a dynamic dict
+                if isinstance(v, dict) or isinstance(v, tuple) or isinstance(v, str):  # allowed types
+                    if isinstance(v, tuple):  # keys only, convert to dict
                         v = {x: True for x in v}
-                    elif isinstance(v, str): # key only, convert to dict    
+                    elif isinstance(v, str):  # key only, convert to dict
                         v = {v: True}
                     if not _match_tags(v, self.data[k]):
                         return False
                 else:
-                    raise Exception("Invalid type for {}: {}".format(k, type(v)))
+                    raise Exception(
+                        "Invalid type for {}: {}".format(k, type(v)))
+
+            elif k == 'source': # self.data[k] is a limited dict
+                if isinstance(v, Pattern) or isinstance(v, tuple) or isinstance(v, str): # raw source match
+                    if not _match_check(v, self.data[k]['raw']):
+                        return False
+
+                elif isinstance(v, dict): # match against fields
+                    for o in ['raw', 'host', 'user', 'nick']:
+                        if isinstance(v[o], Pattern) or isinstance(v[o], tuple) or isinstance(v[o], str):
+                            if o in v and not _match_check(v[o], self.data[k][o]):
+                                return False
+                        else:
+                            raise Exception(
+                                "Invalid type for {}[{}]: {}".format(k, o, type(v)))
+                else:
+                    raise Exception(
+                        "Invalid type for {}: {}".format(k, type(v)))
+
 
             elif k == 'args':  # self.data[k] is an array
-                if isinstance(v, list) or isinstance(v, tuple) or isinstance(v, str): # allowed types
+                if isinstance(v, list) or isinstance(v, tuple) or isinstance(v, str):  # allowed types
                     if not isinstance(v, list):
                         v = [v]
                     if not _match_args(v, self.data[k]):
                         return False
                 else:
-                    raise Exception("Invalid type for {}: {}".format(k, type(v)))
+                    raise Exception(
+                        "Invalid type for {}: {}".format(k, type(v)))
 
             # self.data[k] is a string
-            elif k in ['verb', 'params', 'prefix', 'line', 'host', 'user', 'nick']:
-                if isinstance(v, Pattern) or isinstance(v, tuple) or isinstance(v, str): # allowed types
+            else:
+                if isinstance(v, Pattern) or isinstance(v, tuple) or isinstance(v, str):  # allowed types
                     if not _match_check(v, self.data[k]):
                         return False
                 else:
-                    raise Exception("Invalid type for {}: {}".format(k, type(v)))
+                    raise Exception(
+                        "Invalid type for {}: {}".format(k, type(v)))
         return True
-    
-class CursorParser: # TODO: implement
-    pass

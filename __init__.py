@@ -7,13 +7,14 @@ from time import sleep as pause
 from time import ctime as now
 from traceback import print_tb, print_exc
 from . import hooks, threads, parse
-from .parse import RegexParser
+from .parse import Parser
 from threading import Thread, Timer
-from typing import TypeVar, Optional, Any, NoReturn, Union, Callable
+from typing import TypeVar, Optional, Any, NoReturn, Union, Callable, List, Tuple
 
-action_regex = re.compile("^ACTION (.*)")
+action_regex = re.compile(r"^ACTION (.*)")
 
-T_Parser = TypeVar('T_Parser', bound=RegexParser)
+T_Parser = TypeVar('T_Parser', bound=Parser)
+
 
 class Base(object):
     def __init__(self, host: str, **kwargs) -> None:
@@ -23,7 +24,9 @@ class Base(object):
         Initializes a new pIRC.Base with provided config variables.
         """
         nick = "pIRCBot" if self.__class__ == Base else self.__class__.__name__
-        passphrase = environ.get("{}_PASSPHRASE".format(nick), None)
+        if 'nick' in kwargs.keys():
+            nick = kwargs['nick']
+        passphrase = environ.get(f"{nick}_PASSPHRASE", None)
 
         # setup default values
         self.config = {
@@ -83,24 +86,26 @@ class Base(object):
         self.isupport = {}
         self._quitting = False
         self._running = False
+        self._registered = False
 
         # init funcs
         self._add_listeners()
         if self.__class__ == Base:
             self.load_hooks()
 
-    # def _replace_match(self, match) -> Any:
-    #     if match.group(1) in self.config['replace']:
-    #         val = self.config['replace'][match.group(1)]
-    #         if callable(val):
-    #             return val()
-    #         else:
-    #             return val
-    #     else:
-    #         return ''
+    def _replace_match(self, match) -> Any:
+        if match.group(1) in self.config['replace']:
+            val = self.config['replace'][match.group(1)]
+            if callable(val):
+                return val()
+            else:
+                return val
+        else:
+            return ''
 
-    # def _matcher_replace(self, message: str) -> str: #TODO: figure out where to use this
-    #     matcher = re.sub(':(\w*):', self._replace_match, message)
+    def _matcher_replace(self, message: str) -> str: #TODO: figure out where to use this
+        matcher = re.sub(r':(\w*):', self._replace_match, message)
+        return matcher
 
     def load_hooks(self) -> None:
         access = self.__class__
@@ -115,63 +120,79 @@ class Base(object):
                         func._thread(func, self))
                 else:
                     self._hooks[func._type.lower()].append(func)
-        if 'load' in self._hooks:
-            for func in self._hooks['load']:
-                func(self)
+        self._run_hooks('load')
 
-    def _listener(self, match: Union[dict, bool], func: Callable, temp: bool=False) -> None:
-        self.listeners.append({'temp': temp, 'func': func, 'match': match})
+    def trigger(self, match: Union[dict, bool], func: Callable, temp: bool=False) -> None:
+        self.listeners.append({'match': match, 'func': func, 'temp': temp})
 
-    def _verb_listener(self, verb: str, func: Callable, temp: bool=False) -> None:
-        self._listener({'verb': verb}, func, temp)
+    def on_verb(self, verb: str, func: Callable, temp: bool=False) -> None:
+        self.trigger({'verb': verb}, func, temp)
 
-    def _raw_listener(self, func: Callable, temp: bool=False) -> None:
-        self._listener(True, func, temp)
+    def on_code(self, num: int, func: Callable, temp: bool=False) -> None:
+        self.trigger({'verb': '{:03d}'.format(num)}, func, temp)
 
-    def _code_listener(self, num: int, func: Callable, temp: bool=False) -> None:
-        self._verb_listener('{:03d}'.format(num), func, temp)
+    def on_raw(self, func: Callable, temp: bool=False) -> None:
+        self.trigger(True, func, temp)
+
+    def on(self, verb: Union[str, int, Callable], func: Callable = None) -> None:
+        if type(verb) == int:
+            self.on_code(verb, func)
+        elif type(verb) == str:
+            self.on_verb(verb, func)
+        elif callable(verb):
+            self.on_raw(verb)
+
+    def once(self, verb: Union[str, int, Callable], func: Callable = None) -> None:
+        if type(verb) == int:
+            self.on_code(verb, func, True)
+        elif type(verb) == str:
+            self.on_verb(verb, func, True)
+        elif callable(verb):
+            self.on_raw(verb, True)
+
+    def off(self, verb: Union[str, int, Callable], func: Callable = None) -> None:
+        pass
 
     def _add_listeners(self) -> None:
         # Custom hooks listeners
         self._add_codes()
         self._add_commands()
-        self._raw_listener(self._run_RAW)  # Catch ALL incoming messages
+        self.on_raw(self._run_RAW)  # Catch ALL incoming messages
 
     def _add_codes(self) -> None:
         # Default code commands for bot state management
-        self._code_listener(1, self._init_ping)
-        self._code_listener(5, self._compile_isupport)
-        self._code_listener(353, self._compile_ulist)
-        self._code_listener(443, self._alt_nick)
+        self.on_code(1, self._001_post_register)
+        self.on_code(5, self._005_compile_isupport)
+        self.on_code(353, self._353_compile_ulist)
+        self.on_code(443, self._443_alt_nick)
         # Listener for code command hooks
-        self._verb_listener(re.compile(r'^\d{3}$'), self._run_CODES)
+        self.on_verb(re.compile(r'^\d{3}$'), self._run_CODES)
 
     def _add_commands(self) -> None:
 
         # Self management listeners
         # TODO: find out if these need to be converted to code commands
-        self._verb_listener('JOIN', self._manage_ulist)
-        self._verb_listener('PART', self._manage_ulist)
-        self._verb_listener('NICK', self._manage_ulist)
-        self._verb_listener('QUIT', self._manage_ulist)
-        
-        self._verb_listener('MODE', self._ulist_modes)
-        self._verb_listener('PING', self._ping)
-        self._verb_listener('PONG', self._pong)
-        self._verb_listener('ERROR', self._error)
+        self.on_verb('JOIN', self._on_join)
+        self.on_verb('PART', self._on_part)
+        self.on_verb('NICK', self._on_nick)
+        self.on_verb('QUIT', self._on_quit)
+
+        self.on_verb('MODE', self._on_mode)
+        self.on_verb('PING', self._on_ping)
+        self.on_verb('PONG', self._on_pong)
+        self.on_verb('ERROR', self._on_error)
 
         # Listeners to run hooks
-        self._verb_listener('NOTICE', self._run_NOTICE)
-        self._verb_listener('PRIVMSG', self._run_PRIVMSG)
-        self._verb_listener('QUIT', self._run_QUIT)
-        self._verb_listener('PART', self._run_PART)
-        self._verb_listener('NICK', self._run_NICK)
-        self._verb_listener('JOIN', self._run_JOIN)
-        self._verb_listener('MODE', self._run_MODE)
-        self._verb_listener('PING', self._run_PING)
-        self._verb_listener('PONG', self._run_PONG)
-        self._verb_listener('ERROR', self._run_ERROR)
-
+        self.on_verb('NOTICE', self._run_NOTICE)
+        self.on_verb('PRIVMSG', self._run_PRIVMSG)
+        self.on_verb('QUIT', self._run_QUIT)
+        self.on_verb('PART', self._run_PART)
+        self.on_verb('NICK', self._run_NICK)
+        self.on_verb('JOIN', self._run_JOIN)
+        self.on_verb('MODE', self._run_MODE)
+        self.on_verb('PING', self._run_PING)
+        self.on_verb('PONG', self._run_PONG)
+        self.on_verb('ERROR', self._run_ERROR)
 
     def _listen(self) -> None:
         """
@@ -184,7 +205,7 @@ class Base(object):
         while True:
             if not self._quitting:
                 try:
-                    self._inbuffer += self.socket.recv(2048)
+                    self._inbuffer += self.socket.recv(2048).decode()
                 except socket.timeout:
                     pass
                 # Some IRC daemons disregard the RFC and split lines by \n rather than \r\n.
@@ -195,9 +216,9 @@ class Base(object):
                     # Strip \r from \r\n for RFC-compliant IRC servers.
                     line = line.rstrip('\r')
                     if len(line) == 0:
-                        continue # skip empty lines
+                        continue  # skip empty lines
                     if self.config['verbose']:
-                        print("({0}: {1}) {2}".format(
+                        print("({0}: {1}) << {2}".format(
                             self.config['name'],
                             self.config['host'],
                             line
@@ -211,18 +232,23 @@ class Base(object):
                         func(*args, **kwargs)
                 self._running = False
 
-
-    def _run_hooks(self, parser: T_Parser, key: str, once: Optional[bool]=None) -> bool:
+    def _run_hooks(self, key: str, info: Optional[T_Parser] = None, once: Optional[bool] = None) -> bool:
         if key in self._hooks:
-            for n, func in [(x, y) for x, y in enumerate(self._hooks[key])]:
-                if not hasattr(func, '_match') or parser.compare(**func._match):
-                    func(parser.data)
+            for n, func in enumerate(self._hooks[key]):
+                if info is None:
+                    func(self)
+                    if hasattr(func, '_once') and func._once is True:
+                        del self._hooks[key][n]
+                    if self.config['break_on_match']:
+                        return False
+
+                elif not hasattr(func, '_match') or info.compare(func._match):
+                    func(self, info.data)
                     if hasattr(func, '_once') and func._once is True:
                         del self._hooks[key][n]
                     if self.config['break_on_match']:
                         return False
         return True
-
 
     def _run_threads(self) -> True:
         if 'thread' in self._hooks:
@@ -235,179 +261,135 @@ class Base(object):
             else:
                 return True
 
-
     def _run_listeners(self, line: str) -> None:
         """
         Each listener's associated regular expression is matched against raw IRC
         input. If there is a match, the listener's associated function is called
         with all the regular expression's matched subgroups.
         """
-        parser = RegexParser(line) # TODO: switch to CursorParser
+        info = Parser(line)
 
-        for i, info in enumerate(self.listeners):
-            temp = info['temp'] is True
-            callbacks = info['funcs']
-            
-            if info['match'] is True:
+        for i, listener in enumerate(self.listeners):
+            temp = listener['temp'] is True
+            callback = listener['func']
+
+            if listener['match'] is True:
                 pass
-            elif info['match'] is False:
+            elif listener['match'] is False:
                 continue
-            elif not parser.compare(**info['match']):
+            elif not info.compare(listener['match']):
                 continue
 
-            for callback in callbacks:
-                callback(parser)
-            if temp:
-                del self.listeners[i]
+            callback(info)
+            if temp: del self.listeners[i]
 
-        self._run_hooks(parser, 'once', True)
+        self._run_hooks('once', info, True)
 
-
-    def _run_PRIVMSG(self, parser: T_Parser) -> None:
-        info = parser.data
+    def _run_PRIVMSG(self, info: T_Parser) -> None:
         info['target'] = info['args'][0]
         info['message'] = info['args'][1]
 
         match = action_regex.match(info['message'])
         if match is not None:
             info['message'] = match.groups()[0]
-            self._run_hooks(parser, 'action')
+            self._run_hooks('action', info)
 
         else:
             if info['message'].startswith(self.config['command']):
                 info['message'] = info['message'][len(self.config['command']):]
                 if info['target'].startswith('#'):
-                    if not self._run_hooks(parser, 'chancommand'):
+                    if not self._run_hooks('chancommand', info):
                         return
                 else:
-                    if not self._run_hooks(parser, 'privcommand'):
+                    if not self._run_hooks('privcommand', info):
                         return
-                if not self._run_hooks(parser, 'command'):
+                if not self._run_hooks('command', info):
                     return
             if info['target'].startswith('#'):
-                if not self._run_hooks(parser, 'channel'):
+                if not self._run_hooks('channel', info):
                     return
                 else:
-                    if not self._run_hooks(parser, 'private'):
+                    if not self._run_hooks('private', info):
                         return
-            if not self._run_hooks(parser, 'privmsg'):
+            if not self._run_hooks('privmsg', info):
                 return
-            
 
-    def _run_NOTICE(self, parser: T_Parser) -> None:
-        info = parser.data
+    def _run_NOTICE(self, info: T_Parser) -> None:
         info['target'] = info['args'][0]
-        info['message'] = info['args'][1]
-        if not self._run_hooks(parser, 'notice'):
+        info['message'] = info['args'][-1]
+        if not self._run_hooks('notice', info):
             return
 
-
-    def _run_QUIT(self, parser: T_Parser) -> None:
-        info = parser.data
+    def _run_QUIT(self, info: T_Parser) -> None:
         info['target'] = info['args'][0]
-        info['message'] = info['args'][1]
-        if not self._run_hooks(parser, 'quit'):
+        info['message'] = info['args'][-1]
+        if not self._run_hooks('quit', info):
             return
 
-
-    def _run_PART(self, parser: T_Parser) -> None:
-        info = parser.data
+    def _run_PART(self, info: T_Parser) -> None:
         info['target'] = info['args'][0]
-        info['message'] = info['args'][1]
-        if not self._run_hooks(parser, 'part'):
+        info['message'] = info['args'][-1]
+        if not self._run_hooks('part', info):
             return
 
-
-    def _run_NICK(self, parser: T_Parser) -> None:
-        info = parser.data
+    def _run_NICK(self, info: T_Parser) -> None:
         info['target'] = info['args'][0]
-        info['message'] = info['args'][1]
-        if not self._run_hooks(parser, 'nick'):
+        info['message'] = info['args'][-1]
+        if not self._run_hooks('nick', info):
             return
 
-
-    def _run_JOIN(self, parser: T_Parser) -> None:
-        info = parser.data
+    def _run_JOIN(self, info: T_Parser) -> None:
         info['target'] = info['args'][0]
-        info['message'] = info['args'][1]
-        if not self._run_hooks(parser, 'join'):
+        if not self._run_hooks('join', info):
             return
 
-
-    def _run_MODE(self, parser: T_Parser) -> None:
-        info = parser.data
+    def _run_MODE(self, info: T_Parser) -> None:
         info['target'] = info['args'][0]
-        info['message'] = info['args'][1]
-        if not self._run_hooks(parser, 'mode'):
+        info['message'] = info['args'][-1]
+        if not self._run_hooks('mode', info):
             return
 
+    def _run_PING(self, info: T_Parser) -> None:
+        info['target'] = None
+        info['message'] = info['args'][-1]
+        if not self._run_hooks('ping', info):
+            return
 
-    def _run_PING(self, parser: T_Parser) -> None:
-        info = parser.data
+    def _run_PONG(self, info: T_Parser) -> None:
         info['target'] = info['args'][0]
-        info['message'] = info['args'][1]
-        if not self._run_hooks(parser, 'ping'):
+        info['message'] = info['args'][-1]
+        if not self._run_hooks('pong', info):
             return
 
-
-    def _run_PONG(self, parser: T_Parser) -> None:
-        info = parser.data
+    def _run_ERROR(self, info: T_Parser) -> None:
         info['target'] = info['args'][0]
-        info['message'] = info['args'][1]
-        if not self._run_hooks(parser, 'pong'):
+        info['message'] = info['args'][-1]
+        if not self._run_hooks('error', info):
             return
 
-
-    def _run_ERROR(self, parser: T_Parser) -> None:
-        info = parser.data
+    def _run_CODES(self, info: T_Parser) -> None:
         info['target'] = info['args'][0]
-        info['message'] = info['args'][1]
-        if not self._run_hooks(parser, 'error'):
+        if not self._run_hooks('error', info):
             return
 
-
-    def _run_CODES(self, parser: T_Parser) -> None:
-        info = parser.data
-        info['target'] = info['args'].pop(0)
-        if not self._run_hooks(parser, 'error'):
+    def _run_RAW(self, info: T_Parser) -> None:
+        if not self._run_hooks('raw', info):
             return
 
-
-    def _run_RAW(self, parser: T_Parser) -> None:
-        if not self._run_hooks(parser, 'raw'):
-            return
-
-
-    def _alt_nick(self) -> None:
-        self.config['nick'] += '_'
-        self.nick(self.config['nick'])
-
-
-    def _error(self, parser: T_Parser) -> None:
-        info = parser.data
+    def _on_error(self, info: T_Parser) -> None:
         if not self._quitting:
             self.ERROR += 1
-            raise Exception(str(info['params']))
+            raise Exception(info['args'][-1])
         else:
             self._quitting = False
 
+    def _on_ping(self, info: T_Parser) -> None:
+        self._cmd('PONG', info['args'][-1])
 
-    def _ping(self, parser: T_Parser) -> None:
-        info = parser.data
-        if 'ping' in self._hooks:
-            for func in self._hooks['ping']:
-                func(info['params'])
+    def _on_pong(self, info: T_Parser) -> None:
+        pass
 
-
-    def _pong(self, parser: T_Parser) -> None:
-        info = parser.data
-        if 'pong' in self._hooks:
-            for func in self._hooks['pong']:
-                func(info['params'])
-
-
-    def _compile_isupport(self, parser: T_Parser) -> None: # 005
-        info = parser.data
+    def _005_compile_isupport(self, info: T_Parser) -> None:
         isupport = {}
         for arg in info['args']:
             if arg.find(' ') > -1:
@@ -422,13 +404,11 @@ class Base(object):
             match = re.match(r'\((\w+)\)(\S+)', isupport['PREFIX'])
             self.isupport['PREFIX'].extend(zip(match.group(1), match.group(2)))
 
-
-    def _compile_ulist(self, parser: T_Parser) -> None:
-        info = parser.data
-        if info['args'][0] == '=':
+    def _353_compile_ulist(self, info: T_Parser) -> None:
+        if info['args'][0] == '=': # TODO: implement type properly
             info['args'].pop(0)
-        channel = info['args'][0]
-        args = info['args'][1]
+        channel, args, *rest = info['args']
+        rest = rest 
         for user in args.split():
             if 'PREFIX' in self.isupport:
                 u = list(user)
@@ -447,16 +427,19 @@ class Base(object):
             else:
                 self.ulist[user].update({channel: ''})
 
+    def _443_alt_nick(self) -> None:
+        self.config['nick'] += '_'
+        self.nick(self.config['nick'])
 
-    def _ulist_modes(self, parser: T_Parser) -> None:
-        info = parser.data
-        user = info['args'][0]
-        modes = info['args'][1]
-        args = info['args'][2:]
+    def _on_mode(self, info: T_Parser) -> None:
+        pass
+        # self._ulist_modes(info)  # placeholder
+
+    def _ulist_modes(self, info: T_Parser) -> None:
+        user, modes, *args = info['args']
         state = None
         offset = 0
         modes = list(modes)
-        args = args.split()
         for n, mode in enumerate(modes):
             if mode in '+-':
                 state = mode
@@ -474,10 +457,24 @@ class Base(object):
                             [user].replace(mode, '')}
                     )
 
+    def _on_join(self, info: T_Parser) -> None:
+        self._manage_ulist(info)  # placeholder
+        pass
 
-    def _manage_ulist(self, parser: T_Parser) -> None:
-        info = parser.data
-        u = info['user']
+    def _on_part(self, info: T_Parser) -> None:
+        # self._manage_ulist(info)  # placeholder
+        pass
+
+    def _on_nick(self, info: T_Parser) -> None:
+        # self._manage_ulist(info)  # placeholder
+        pass
+
+    def _on_quit(self, info: T_Parser) -> None:
+        # self._manage_ulist(info)  # placeholder
+        pass
+
+    def _manage_ulist(self, info: T_Parser) -> None:
+        u = info['source']['user']
         args = info['args'][0]
         if info['verb'] == 'JOIN':
             self.ulist.setdefault(u, {})
@@ -485,37 +482,40 @@ class Base(object):
 
         elif info['verb'] == 'NICK':
             if u in self.ulist:
-                self.ulist[args] = self.ulist[u] # TODO: update args
+                self.ulist[args] = self.ulist[u]  # TODO: update args
                 del self.ulist[u]
             if self.config['nick'] == u:
                 self.config['nick'] = args
 
         elif info['verb'] == 'PART':
             if u == self.config['nick']:
-                for u in [x for x in self.ulist.keys()]:
+                for u in self.ulist.keys():
                     del self.ulist[u][args]
                     if not len(self.ulist[u]):
                         del self.ulist[u]
-            else:
+            elif u in self.ulist:
                 del self.ulist[u][args]
                 if not len(self.ulist[u]):
                     del self.ulist[u]
 
         elif info['verb'] == 'QUIT':
-            del self.ulist[u]
-            
+            if u in self.ulist:
+                del self.ulist[u]
 
-    def _init_ping(self, message: str) -> None:
-        self.listeners.insert(0, {
-            'temp': True, 
-            'func': self._init, 
-            'match': {'command': 'PONG', 'args': ['_init_']} # verify
-        })
-        self.ping('_init_')
+    def _001_post_register(self, message: str) -> None:
+        pass
+
+        # self.listeners.insert(0, {
+        #     'temp': True,
+        #     'func': self._init,
+        #     'match': {'command': 'PONG', 'args': ['_init_']} # verify
+        # })
+        # self.ping('_init_')
 
     def _init(self) -> None:
         if self.config['passphrase']:
-            self._cmd("PRIVMSG", "NickServ", "identify {}".format(self.config['passphrase']))
+            self._cmd("PRIVMSG", "NickServ", "identify {}".format(
+                self.config['passphrase']))
 
         self.ERROR = 0
 
@@ -543,25 +543,26 @@ class Base(object):
             else:
                 cmd += ' :{0}'.format(x)
         self._raw_cmd(cmd)
-        
 
     def _raw_cmd(self, raw_line: str) -> None:
         if self.config['verbose']:
             # prints to console, does not support UTF8. Convert to \u style output?
-            print("({0}: {1}) > {2}".format(
+            print("({0}: {1}) >> {2}".format(
                 self.config['name'],
                 self.config['host'],
-                "".join([x if ord(x) < 128 else '?' for x in raw_line])
+                raw_line
+                # "".join([x if ord(x) < 128 else '?' for x in raw_line])
             ))
         try:
-            self.socket.send(raw_line+"\r\n")
+            print
+            self.socket.send(str.encode(raw_line+"\r\n"))
         except socket.timeout:
             print(">>>Socket timed out.")
 
-    ### Functions that are common use case for sending commands to the server
+    # Functions that are common use case for sending commands to the server
 
     @hooks.queue()
-    def message(self, targets: Union[list[str], str], messages: Union[list[tuple[str, int]], list[str], str]) -> None:
+    def message(self, targets: Union[List[str], str], messages: Union[List[Tuple[str, int]], List[str], str]) -> None:
         if isinstance(targets, str):
             targets = [targets]
         if isinstance(messages, str):
@@ -575,7 +576,7 @@ class Base(object):
             pause(z)
 
     @hooks.queue()
-    def notice(self, targets: Union[list[str], str], messages: Union[list[tuple[str, int]], list[str], str]) -> None:
+    def notice(self, targets: Union[List[str], str], messages: Union[List[Tuple[str, int]], List[str], str]) -> None:
         if isinstance(targets, str):
             targets = [targets]
         if isinstance(messages, str):
@@ -589,7 +590,7 @@ class Base(object):
             pause(z)
 
     @hooks.queue()
-    def me(self, targets: Union[list[str], str], messages: Union[list[tuple[str, int]], list[str], str]) -> None:
+    def me(self, targets: Union[List[str], str], messages: Union[List[Tuple[str, int]], List[str], str]) -> None:
         if isinstance(targets, str):
             targets = [targets]
         if isinstance(messages, str):
@@ -603,7 +604,7 @@ class Base(object):
             pause(z)
 
     @hooks.queue()
-    def join(self, *channels: tuple[Union[str, tuple]]) -> None:
+    def join(self, *channels: Tuple[Union[str, tuple]]) -> None:
         for chan in channels:
             if isinstance(chan, tuple):
                 self._cmd("JOIN", *chan)
@@ -612,7 +613,7 @@ class Base(object):
             self._cmd("MODE", chan)
 
     @hooks.queue()
-    def part(self, *channels: tuple[str]) -> None:
+    def part(self, *channels: Tuple[str]) -> None:
         self._cmd("PART", ','.join(chan for chan in channels))
 
     @hooks.queue()
@@ -736,7 +737,7 @@ class Base(object):
                 break
 
     def _connect(self) -> None:
-        """Sets socket connection and sends initial info to the server."""
+        """Sets socket connection and negotiates capabilites and registration"""
         self.socket = socket.socket()
         self.socket.connect((self.config['host'], self.config['port']))
         self.socket.settimeout(1.0)
@@ -745,11 +746,41 @@ class Base(object):
                 self.config['name'],
                 self.config['host']
             ))
-        self._cmd('CAP LS')
+
+        # Setup Connection Initialization
+
+
+        def _CAP_REQ(info):
+            """Request capabilities offered by the server"""
+            allowed = info['args'][-1].split(' ')
+            requested = ['multi-prefix']
+            for i, r in enumerate(requested):
+                if r not in allowed:
+                    del requested[i]
+            self._cmd('CAP REQ', *requested)
+
+        def _CAP_END(info):
+            """End capability negotiations"""
+            self._cmd('CAP END')
+
+        def _CONNECTED(info):
+            """Do initial connection commands"""
+            if len(self.config['channels']):
+                self.join(*self.config['channels'])
+
+        self.trigger({'verb': 'CAP', 'args': ['LS']}, _CAP_REQ, True)
+        self.trigger({'verb': 'CAP', 'args': ['ACK']}, _CAP_END, True)
+        self.on_code(376, _CONNECTED, True) #MOTD end, trigger initial actions
+        
+        # Initiate capability negotiation
+        self._cmd('CAP LS 302')
+
+        # Initiate user registration
+        if self.config['passphrase']:
+            self._cmd('PASS', self.config['passphrase'])
+        self._cmd('USER', self.config['ident'],
+                  '0', '*', self.config['realname'])
         self._cmd('NICK', self.config['nick'])
-        self._cmd('USER', self.config['ident'], self.config['host'], '0', self.config['realname'])
-        self._cmd('CAP REQ :multi-prefix')
-        self._cmd('CAP END')
 
     def _close(self, runhooks: bool=True) -> None:
         if 'thread' in self._hooks:
@@ -760,9 +791,7 @@ class Base(object):
             self.socket.close()
             self.socket = None
         if runhooks:
-            if 'close' in self._hooks:
-                for func in self._hooks['close']:
-                    func(self)
+            self._run_hooks('close')
 
     @hooks.queue()
     def close(self) -> NoReturn:
@@ -803,23 +832,23 @@ class Bot(Base):
     """
 
     def __init__(self, host: str, **kwargs) -> None:
-
-        super(Bot, self).__init__(host, {
+        default = {
             'hookscripts': [],
             'reload_override': False,
             'ref': None
-        }, **kwargs)
+        }
+        super(Bot, self).__init__(host, **{**default, **kwargs})
 
         if not self.config['reload_override']:
-            self.config.setdefault('reload_regex', re.compile(f":{self.config['command']}reload$"))
+            self.config.setdefault('reload_regex', re.compile(
+                f":{self.config['command']}reload$"))
             self.config.setdefault('reload_func', self.load_hooks)
-            self._listener(
-                {'verb': 'PRIVMSG', 'params': self.config['reload_regex']},
+            self.trigger(
+                {'verb': 'PRIVMSG', 'args': [None ,self.config['reload_regex']]},
                 self.config['reload_func']
             )
-            
-        self.load_hooks()
 
+        self.load_hooks()
 
     def load_hooks(self) -> None:
         if callable(self.config['hookscripts']):
@@ -921,6 +950,7 @@ class BotGroup(object):
         self.rethread = interval
         self.monitor = None
         self.ref = ref
+        self._quitting = False
 
     def __getitem__(self, host: str) -> str:
         """
@@ -1010,7 +1040,7 @@ class BotGroup(object):
         """
         for host, bot in self.get_all():
             thread = bot['thread']
-            if not thread.is_alive():
+            if not thread.is_alive() and not self._quitting:
                 if (bot['instance'].config['verbose']):
                     print(
                         'Bot thread for {0} died (see stack trace). Rebooting...'.format(host))
@@ -1030,8 +1060,18 @@ class BotGroup(object):
                 self._bots[host]['instance'] = new_bot
                 self._bots[host]['thread'].start()
 
+    def close(self):
+        if not self._quitting:
+            self._quitting = True
+            for bot in self.get_all('bots'):
+                bot['instance'].close()
+            if self.monitor:
+                self.monitor.cancel()
+            print('Waiting for threads to close...')
+            pause(1)
 
-T_Group = TypeVar('T_Group', BotGroup)
+
+T_Group = TypeVar('T_Group', bound=BotGroup)
 
 
 def console(bot: Optional[Union[T_Base, T_Group]]=None, **kwargs) -> None:
@@ -1069,6 +1109,13 @@ def console(bot: Optional[Union[T_Base, T_Group]]=None, **kwargs) -> None:
             print('===============')
             print(eval(a))
             print('===============')
+        except SystemExit:
+            if bot:
+                bot.close()
+            for x in locals():
+                if isinstance(x, Base) or isinstance(x, BotGroup):
+                    x.close()
+            return
         except:
             # Catch for exceptions to allow the console to continue operating.
             print('>>>Exception occured: {0}'.format(sys.exc_info()[1]))

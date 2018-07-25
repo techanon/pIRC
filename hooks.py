@@ -129,8 +129,10 @@ class command(object):
             message = re.compile('^{}$'.format(func.func_name.replace('_', ' ')))
 
         @wraps(func)
-        def wrapped_command(*args, **kwargs):
-            return func(*args, **kwargs)
+        def wrapped_command(_self, info):
+            if isinstance(message, Pattern):
+                info['match'] = message.match(info['message'])
+            return func(_self, info)
         wrapped_command._type = 'COMMAND'
         wrapped_command._match = {'message': message}
         return wrapped_command
@@ -148,9 +150,11 @@ class chancommand(object):
             message = re.compile('^{}$'.format(func.func_name.replace('_', ' ')))
 
         @wraps(func)
-        def wrapped_command(*args, **kwargs):
-            return func(*args, **kwargs)
-        wrapped_command._type = 'PRIVCOMMAND'
+        def wrapped_command(_self, info):
+            if isinstance(message, Pattern):
+                info['match'] = message.match(info['message'])
+            return func(_self, info)
+        wrapped_command._type = 'CHANCOMMAND'
         wrapped_command._match = {'message': message}
         return wrapped_command
 
@@ -167,8 +171,10 @@ class privcommand(object):
             message = re.compile('^{}$'.format(func.func_name.replace('_', ' ')))
 
         @wraps(func)
-        def wrapped_command(*args, **kwargs):
-            return func(*args, **kwargs)
+        def wrapped_command(_self, info):
+            if isinstance(message, Pattern):
+                info['match'] = message.match(info['message'])
+            return func(_self, info)
         wrapped_command._type = 'PRIVCOMMAND'
         wrapped_command._match = {'message': message}
         return wrapped_command
@@ -176,6 +182,7 @@ class privcommand(object):
 
 class privmsg(object):
     # verb - PRIVMSG
+    # Matches both direct and channel messages
     def __init__(self, match: Optional[Union[str, Pattern]]=None):
         self._match = match
 
@@ -187,8 +194,10 @@ class privmsg(object):
             message = re.compile('^{}$'.format(func.func_name.replace('_', ' ')))
 
         @wraps(func)
-        def wrapped_command(*args, **kwargs):
-            return func(*args, **kwargs)
+        def wrapped_command(_self, info):
+            if isinstance(message, Pattern):
+                info['match'] = message.match(info['message'])
+            return func(_self, info)
         wrapped_command._type = 'PRIVMSG'
         wrapped_command._match = {'message': message}
         return wrapped_command
@@ -208,8 +217,10 @@ class channel(object):
             message = re.compile('^{}$'.format(func.func_name.replace('_', ' ')))
 
         @wraps(func)
-        def wrapped_command(*args, **kwargs):
-            return func(*args, **kwargs)
+        def wrapped_command(_self, info):
+            if isinstance(message, Pattern):
+                info['match'] = message.match(info['message'])
+            return func(_self, info)
         wrapped_command._type = 'CHANNEL'
         wrapped_command._match = {'message': message}
         return wrapped_command
@@ -229,8 +240,10 @@ class private(object):
             message = re.compile('^{}$'.format(func.func_name.replace('_', ' ')))
 
         @wraps(func)
-        def wrapped_command(*args, **kwargs):
-            return func(*args, **kwargs)
+        def wrapped_command(_self, info):
+            if isinstance(message, Pattern):
+                info['match'] = message.match(info['message'])
+            return func(_self, info)
         wrapped_command._type = 'PRIVATE'
         wrapped_command._match = {'message': message}
         return wrapped_command
@@ -250,8 +263,10 @@ class action(object):
             message = re.compile('^{}$'.format(func.func_name.replace('_', ' ')))
 
         @wraps(func)
-        def wrapped_command(*args, **kwargs):
-            return func(*args, **kwargs)
+        def wrapped_command(_self, info):
+            if isinstance(message, Pattern):
+                info['match'] = message.match(info['message'])
+            return func(_self, info)
         wrapped_command._type = 'ACTION'
         wrapped_command._match = {'message': message}
         return wrapped_command
@@ -271,8 +286,10 @@ class notice(object):
             message = re.compile('^{}$'.format(func.func_name.replace('_', ' ')))
 
         @wraps(func)
-        def wrapped_command(*args, **kwargs):
-            return func(*args, **kwargs)
+        def wrapped_command(_self, info):
+            if isinstance(message, Pattern):
+                info['match'] = message.match(info['message'])
+            return func(_self, info)
         wrapped_command._type = 'NOTICE'
         wrapped_command._match = {'message': message}
         return wrapped_command
@@ -282,18 +299,18 @@ class notice(object):
 class code(object):
     # verb - 3 digit number
     def __init__(self, code: int):
-        if not code or not isinstance(code, int) or code > 999:
+        if code > 999:
             raise Exception(
-                "Numeric code must be present as a 3 digit integer for a code hook."
+                "Numeric code must be an integer less than 999 for a code hook."
             )
         self._code = code
 
     def __call__(self, func: Callable):
         @wraps(func)
-        def wrapped_command(*args, **kwargs):
-            return func(*args, **kwargs)
+        def wrapped_command(_self, info):
+            return func(_self, info)
         wrapped_command._type = 'CODE'
-        wrapped_command._match = {'verb': self._code}
+        wrapped_command._match = {'verb': '{:03d}'.format(self._code)}
         return wrapped_command
 
 ### Hooks that trigger for each incoming line, custom match against the whole line
@@ -309,10 +326,12 @@ class raw(object):
             match = True
 
         @wraps(func)
-        def wrapped_command(*args, **kwargs):
-            return func(*args, **kwargs)
+        def wrapped_command(_self, info):
+            if isinstance(match, Pattern):
+                info['match'] = match.match(info['raw'])
+            return func(_self, info)
         wrapped_command._type = 'RAW'
-        wrapped_command._match = {'line': match}
+        wrapped_command._match = {'raw': match}
         return wrapped_command
 
 ### Hooks that trigger on a specific interval or interval range in seconds, specify the min and max wait time
@@ -333,8 +352,8 @@ def interval(min: int, max: Optional[int]=None):
 # must be declared only on an already hooked function
 # eg
 #
-# @once()
-# @code(420)
+# @hooks.once()
+# @hooks.code(420)
 # def custom_function(val):
 #   print("This will wait for a line with verb '420', run, then be removed from further execution")
 
