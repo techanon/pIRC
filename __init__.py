@@ -97,7 +97,7 @@ class Base(object):
         if match.group(1) in self.config['replace']:
             val = self.config['replace'][match.group(1)]
             if callable(val):
-                return val()
+                return val(self)
             else:
                 return val
         else:
